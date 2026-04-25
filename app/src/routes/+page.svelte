@@ -1,156 +1,198 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import {
+    ask,
+    open as openDialog,
+    save as saveDialog,
+  } from "@tauri-apps/plugin-dialog";
 
-  let name = $state("");
-  let greetMsg = $state("");
+  type FileDoc = { path: string; content: string };
 
-  async function greet(event: Event) {
-    event.preventDefault();
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    greetMsg = await invoke("greet", { name });
+  const FILTERS = [{ name: "Typst", extensions: ["typ"] }];
+
+  let path = $state<string | null>(null);
+  let content = $state("");
+  let dirty = $state(false);
+  let status = $state("");
+
+  async function openFile() {
+    try {
+      const selected = await openDialog({ multiple: false, filters: FILTERS });
+      if (typeof selected !== "string") return;
+      const doc = await invoke<FileDoc>("open_file", { path: selected });
+      path = doc.path;
+      content = doc.content;
+      dirty = false;
+      status = "";
+    } catch (e) {
+      status = String(e);
+    }
   }
+
+  async function saveAs() {
+    try {
+      const selected = await saveDialog({
+        filters: FILTERS,
+        defaultPath: path ?? "untitled.typ",
+      });
+      if (!selected) return;
+      await invoke("save_file", { path: selected, content });
+      path = selected;
+      dirty = false;
+      status = "";
+    } catch (e) {
+      status = String(e);
+    }
+  }
+
+  async function save() {
+    if (!path) {
+      await saveAs();
+      return;
+    }
+    try {
+      await invoke("save_file", { path, content });
+      dirty = false;
+      status = "";
+    } catch (e) {
+      status = String(e);
+    }
+  }
+
+  function onInput(e: Event) {
+    content = (e.target as HTMLTextAreaElement).value;
+    dirty = true;
+  }
+
+  function basename(p: string | null): string {
+    if (!p) return "(無題)";
+    const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+    return i >= 0 ? p.slice(i + 1) : p;
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    const meta = e.ctrlKey || e.metaKey;
+    if (!meta) return;
+    const key = e.key.toLowerCase();
+    if (key === "o" && !e.shiftKey) {
+      e.preventDefault();
+      openFile();
+    } else if (key === "s" && !e.shiftKey) {
+      e.preventDefault();
+      save();
+    } else if (key === "s" && e.shiftKey) {
+      e.preventDefault();
+      saveAs();
+    }
+  }
+
+  onMount(() => {
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
+        if (!dirty) return;
+        const ok = await ask("未保存の変更があります。終了してよろしいですか?", {
+          title: "右筆",
+          kind: "warning",
+        });
+        if (!ok) event.preventDefault();
+      });
+    })();
+    return () => unlisten?.();
+  });
 </script>
 
-<main class="container">
-  <h1>Welcome to Tauri + Svelte</h1>
+<svelte:window onkeydown={onKeydown} />
 
-  <div class="row">
-    <a href="https://vite.dev" target="_blank">
-      <img src="/vite.svg" class="logo vite" alt="Vite Logo" />
-    </a>
-    <a href="https://tauri.app" target="_blank">
-      <img src="/tauri.svg" class="logo tauri" alt="Tauri Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank">
-      <img src="/svelte.svg" class="logo svelte-kit" alt="SvelteKit Logo" />
-    </a>
-  </div>
-  <p>Click on the Tauri, Vite, and SvelteKit logos to learn more.</p>
-
-  <form class="row" onsubmit={greet}>
-    <input id="greet-input" placeholder="Enter a name..." bind:value={name} />
-    <button type="submit">Greet</button>
-  </form>
-  <p>{greetMsg}</p>
-</main>
+<div class="app">
+  <header class="toolbar">
+    <button onclick={openFile}>開く</button>
+    <button onclick={save}>保存</button>
+    <button onclick={saveAs}>名前を付けて保存</button>
+    <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
+    {#if status}<span class="status">{status}</span>{/if}
+  </header>
+  <textarea
+    class="editor"
+    value={content}
+    oninput={onInput}
+    spellcheck="false"
+    placeholder="ここに Typst を書きます"
+  ></textarea>
+</div>
 
 <style>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.svelte-kit:hover {
-  filter: drop-shadow(0 0 2em #ff3e00);
-}
-
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+  :global(:root) {
+    color-scheme: dark;
   }
 
-  a:hover {
-    color: #24c8db;
+  :global(html, body) {
+    margin: 0;
+    height: 100%;
+    font-family: system-ui, sans-serif;
+    background: #1e1e1e;
+    color: #e6e6e6;
   }
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
   }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
 
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #2a2a2a;
+    border-bottom: 1px solid #3a3a3a;
+  }
+
+  .toolbar button {
+    padding: 4px 10px;
+    background: #3a3a3a;
+    color: #e6e6e6;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .toolbar button:hover {
+    background: #4a4a4a;
+  }
+
+  .filename {
+    margin-left: 8px;
+    font-size: 13px;
+    color: #b0b0b0;
+  }
+
+  .status {
+    margin-left: auto;
+    font-size: 12px;
+    color: #ff8080;
+  }
+
+  .editor {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    background: #1e1e1e;
+    color: #e6e6e6;
+    border: none;
+    outline: none;
+    resize: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .editor::placeholder {
+    color: #6a6a6a;
+  }
 </style>

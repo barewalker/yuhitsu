@@ -67,13 +67,42 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] `cargo check` 通過(47.82s、Tauri 2 依存解決済み)
 - [x] `pnpm build` 通過(1.75s、frontend production ビルド)
 - [x] **`pnpm tauri dev` で GUI ウィンドウ起動確認**(2026-04-25 氏が確認、デフォルトの Tauri+Svelte welcome 画面表示)
-- [ ] Sprint 1 commit
+- [x] Sprint 1 commit(`91970ec feat: scaffold Tauri 2 + Svelte 5 app under app/`)
 
-### Sprint 2 以降の機能
-- [ ] Tauri シェル、ファイル/フォルダ開閉
-- [ ] CodeMirror 6 + Tinymist LSP 統合
-- [ ] Live preview pane
-- [ ] PDF エクスポート
+### Sprint 2: 基本編集ループ(ファイル開閉 → 編集 → プレビュー → 出力)
+
+実装順序: **(1) ファイル開閉 → (2) エディタ + LSP → (3) プレビュー → (4) PDF**。
+最低限の編集 1 ループを通すことを優先し、各機能は MVP 水準でつなぐ。
+
+#### (1) Tauri シェル、ファイル/フォルダ開閉
+- [ ] `tauri-plugin-dialog` / `tauri-plugin-fs` 追加(または相当のコマンド実装)
+- [ ] Open File / Save / Save As の Tauri command(`.typ` 想定、UTF-8)
+- [ ] Open Folder(将来のファイルツリー用、最低限のディレクトリ選択)
+- [ ] Svelte 側で menubar or キーバインドからメニュー呼び出し
+- [ ] dirty 状態管理(未保存マーク、終了時の確認)
+
+#### (2) CodeMirror 6 + Tinymist LSP 統合
+- [ ] CodeMirror 6 を Svelte に組み込み(`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`)
+- [ ] Typst 用 syntax highlighting(`codemirror-lang-typst` などを評価、無ければ自前 Lezer grammar)
+- [ ] **エディタ操作モード3種ビルトイン**(差別化ポイント、設定で切替):
+  - [ ] OS 標準(CodeMirror 6 デフォルトキーマップ)
+  - [ ] vim(`@replit/codemirror-vim`、MIT)
+  - [ ] emacs(`@replit/codemirror-emacs`、MIT)
+  - [ ] 設定永続化(Tauri store plugin or 自前 JSON)
+- [ ] Tauri バックエンドから tinymist を subprocess spawn(stdio JSON-RPC)
+- [ ] LSP クライアント実装(または `vscode-languageclient` 流用検討)
+- [ ] 補完 / 診断 / hover / 定義ジャンプ / format をエディタに配線
+
+#### (3) Live preview pane
+- [ ] tinymist preview を起動(`tinymist preview` サブコマンド)
+- [ ] WebSocket 接続、incremental SVG 受信
+- [ ] エディタ ←→ preview の同期スクロール
+- [ ] 編集→反映のレイテンシ確認
+
+#### (4) PDF エクスポート
+- [ ] 公式 typst crate を Tauri バックエンドから呼ぶ(または tinymist 経由でも可、要検討)
+- [ ] File → Export PDF メニュー
+- [ ] フォントロード経路の暫定実装(同梱フォントは Sprint 3 以降)
 - [ ] 日本語テンプレート5本
   - [ ] 業務報告書
   - [ ] 稟議書
@@ -155,3 +184,9 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - ✅ **typst crate は公式(typst/typst)のみ** 使用(Myriad-Dreamin fork は引き込まない)
 - ✅ **GPLv3 隔離ルールを CLAUDE.md に明文化**(Typstudio 由来コード持込み禁止、依存追加時のライセンス確認義務)
 - → Phase 1 着手準備完了
+
+### 2026-04-25: Sprint 2 スコープ確定
+- 実装順序:**(1) ファイル開閉 → (2) エディタ+LSP → (3) プレビュー → (4) PDF**(氏承認)
+- **エディタ操作モード3種ビルトイン**(氏指示):OS 標準 / vim / emacs を標準装備、設定で切替
+  - 採用ライブラリ:CodeMirror 6 デフォルト + `@replit/codemirror-vim` + `@replit/codemirror-emacs`(全て MIT、Apache-2.0 互換)
+  - vim/emacs ユーザーを取り込みつつ、非エンジニアには OS 標準を提供する両取り戦略
