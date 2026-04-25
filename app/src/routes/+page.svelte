@@ -92,13 +92,16 @@
   onMount(() => {
     let unlisten: (() => void) | undefined;
     (async () => {
-      unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
+      const win = getCurrentWindow();
+      unlisten = await win.onCloseRequested(async (event) => {
         if (!dirty) return;
+        // preventDefault は同期で呼ぶ必要があるため、await より前に必ず呼ぶ
+        event.preventDefault();
         const ok = await ask("未保存の変更があります。終了してよろしいですか?", {
           title: "右筆",
           kind: "warning",
         });
-        if (!ok) event.preventDefault();
+        if (ok) await win.destroy();
       });
     })();
     return () => unlisten?.();
