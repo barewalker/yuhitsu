@@ -40,15 +40,15 @@ Yuhitsu は Typst をベースにした、GUI 親和的なローカルデスク�
 4. **表・数式・図・参考文献の GUI 挿入ボタン**
    - 将来的に Detypify(手書き数式認識)統合も検討
 
-## 技術スタック(暫定)
+## 技術スタック(Phase 0 完了時点で確定)
 
-- **UI フレームワーク**: Tauri (Rust + WebView)
-- **エディタ**: CodeMirror 6(Monaco は電力消費と重さで非推奨)
-- **Typst 統合**: typst crate を Tauri バックエンドに埋め込み
-- **LSP**: tinymist を library または LSP プロセスとして統合
-- **プレビュー**: SVG または Canvas レンダリング(tinymist の preview 機構利用)
+- **デスクトップシェル**: **Tauri 2.x**(Rust + WebView)
+- **エディタ**: **CodeMirror 6**(Monaco は電力消費・和文 IME・重量で不採用)
+- **Typst 統合**: 公式 **typst crate**(typst/typst)を Tauri バックエンドに直接リンク。tinymist 同梱の Myriad-Dreamin fork は引き込まない
+- **LSP**: **tinymist を subprocess として spawn**(stdio JSON-RPC)。エディタ知能(補完/診断/hover/定義/format)はすべて tinymist に委譲し、自前実装しない
+- **プレビュー**: **tinymist preview の WebSocket + incremental SVG** を流用。PNG ラスタ方式は採らない
 
-ただし Phase 0 の調査結果次第で変更の可能性あり。
+詳細根拠: `docs/phase0-typstudio-analysis.md` / `docs/phase0-tinymist-analysis.md` / `docs/phase0-decision.md`
 
 ## リポジトリ方針
 
@@ -68,9 +68,19 @@ Yuhitsu は Typst をベースにした、GUI 親和的なローカルデスク�
 ## ライセンス
 
 - 本体: **Apache-2.0**(Typst エコシステムと整合、特許保護を確保)
-- Typstudio を fork する場合は元ライセンスに従う(要確認、ただし fork 先は Apache-2.0 を選択可能)
 - 同梱フォントは SIL OFL 1.1
 - ソースファイル冒頭のライセンスヘッダは付与しない方針(LICENSE ファイルで一元管理)
+
+### GPLv3 コード隔離(絶対厳守)
+
+Phase 0 で Typstudio の fork を断念した経緯(`docs/phase0-decision.md`)から、本体リポには以下を**一切持ち込まない**:
+
+- Typstudio(GPLv3)由来のコード断片・ファイル・アセット
+- その他 GPL 系ライセンス(GPLv2/v3, AGPL, LGPL など強コピーレフト)のコード
+
+参照実装としての読解は可(`~/Projects/yuhitsu-refs/typstudio/` に保持)。ただし関数単位・ファイル単位のコピーや、見ながらの「同型コーディング」は GPL 汚染リスクがあるため避ける。アルゴリズムの理解 → 自分の言葉で再設計、を徹底する。
+
+依存追加時は Cargo / npm パッケージのライセンスを必ず確認し、GPL 系が混入しないようにする(MIT / Apache-2.0 / BSD / MPL-2.0 / ISC / Unlicense は OK、GPL 系・SSPL・Commons Clause は不可、判断つかない時は氏に確認)。
 
 ## コミット規約
 
