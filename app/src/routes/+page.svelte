@@ -7,6 +7,7 @@
     open as openDialog,
     save as saveDialog,
   } from "@tauri-apps/plugin-dialog";
+  import Editor from "$lib/Editor.svelte";
 
   type FileDoc = { path: string; content: string };
 
@@ -61,8 +62,8 @@
     }
   }
 
-  function onInput(e: Event) {
-    content = (e.target as HTMLTextAreaElement).value;
+  function onEditorChange(next: string) {
+    content = next;
     dirty = true;
   }
 
@@ -114,13 +115,7 @@
     <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
     {#if status}<span class="status">{status}</span>{/if}
   </header>
-  <textarea
-    class="editor"
-    value={content}
-    oninput={onInput}
-    spellcheck="false"
-    placeholder="ここに Typst を書きます"
-  ></textarea>
+  <Editor value={content} onChange={onEditorChange} />
 </div>
 
 <style>
@@ -177,22 +172,8 @@
     color: #ff8080;
   }
 
-  .editor {
+  .app :global(.cm-host) {
     flex: 1;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 12px;
-    background: #1e1e1e;
-    color: #e6e6e6;
-    border: none;
-    outline: none;
-    resize: none;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  .editor::placeholder {
-    color: #6a6a6a;
+    min-height: 0;
   }
 </style>
