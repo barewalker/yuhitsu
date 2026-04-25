@@ -74,12 +74,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 実装順序: **(1) ファイル開閉 → (2) エディタ + LSP → (3) プレビュー → (4) PDF**。
 最低限の編集 1 ループを通すことを優先し、各機能は MVP 水準でつなぐ。
 
-#### (1) Tauri シェル、ファイル/フォルダ開閉
-- [ ] `tauri-plugin-dialog` / `tauri-plugin-fs` 追加(または相当のコマンド実装)
-- [ ] Open File / Save / Save As の Tauri command(`.typ` 想定、UTF-8)
-- [ ] Open Folder(将来のファイルツリー用、最低限のディレクトリ選択)
-- [ ] Svelte 側で menubar or キーバインドからメニュー呼び出し
-- [ ] dirty 状態管理(未保存マーク、終了時の確認)
+#### (1) Tauri シェル、ファイル/フォルダ開閉(c7be3c4 で完了)
+- [x] `tauri-plugin-dialog` 追加(`tauri-plugin-fs` は使わず Rust 側 command で完結 = ハイブリッド方式 C)
+- [x] Open File / Save の Tauri command(`.typ` 想定、UTF-8、`open_file` / `save_file`)
+- [x] Svelte 側ツールバー(開く / 保存 / 名前を付けて保存)+ Ctrl/Cmd+O / S / Shift+S
+- [x] dirty 状態管理(`*` マーク、`onCloseRequested` で終了時の確認)
+- [ ] Open Folder(将来のファイルツリー用、最低限のディレクトリ選択)— **Sprint 2 (2) 以降に繰越**(現時点で不要)
 
 #### (2) CodeMirror 6 + Tinymist LSP 統合
 - [ ] CodeMirror 6 を Svelte に組み込み(`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`)
