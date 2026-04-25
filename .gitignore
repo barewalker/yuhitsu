@@ -1,0 +1,29 @@
+# Cargo (workspace 配下に target/ が出来る)
+/target/
+
+# Node
+node_modules/
+
+# SvelteKit / Vite
+/app/build/
+/app/.svelte-kit/
+/app/package/
+/app/vite.config.js.timestamp-*
+/app/vite.config.ts.timestamp-*
+
+# Tauri (生成物)
+/app/src-tauri/gen/
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# 環境変数
+.env
+.env.*
+!.env.example
