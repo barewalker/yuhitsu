@@ -91,11 +91,15 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] `t.list`(`-` `+`)・`t.definitionOperator`(`/`)など Typst 固有タグをカバー
 
 #### (3) Live preview pane(順序を上げて Sprint 2 内で先行実装)
-- [ ] tinymist preview を起動(`tinymist preview` サブコマンド)
-- [ ] WebSocket 接続、incremental SVG 受信
-- [ ] +page.svelte を 2 ペイン化(左: エディタ、右: SVG プレビュー)
+- [x] tinymist preview を起動(subprocess、`--no-open --data-plane-host 127.0.0.1:23625 --control-plane-host 127.0.0.1:23626`)— commit `e1881c5`
+- [x] +page.svelte を 2 ペイン化(左: エディタ、右: プレビュー)
+- [x] **iframe 方式で MVP 実装**(http://127.0.0.1:23625/ をそのまま表示、tinymist 公式フロントエンド HTML を流用)
+- [x] WindowEvent::Destroyed で subprocess を kill(プロセスリーク防止)
+- [x] ファイル切替時の preview 再起動・既存パス保存時の自動再コンパイル動作確認
+- [ ] HTTP プローブによる起動完了判定(現状は 1.5 秒固定 wait)
+- [ ] 自前 WebSocket クライアントへの置き換え(エディタ ↔ preview 双方向同期、クリックジャンプ等)
 - [ ] エディタ ←→ preview の同期スクロール
-- [ ] 編集→反映のレイテンシ確認
+- [ ] 編集中(未保存)もリアルタイムにプレビュー反映(現状は保存時に tinymist が watch 検知)
 
 #### (4) PDF エクスポート
 - [ ] 公式 typst crate を Tauri バックエンドから呼ぶ(または tinymist 経由でも可、要検討)
