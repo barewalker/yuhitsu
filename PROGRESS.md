@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-04-25
-現在のフェーズ: **Phase 1 — Sprint 1 進行中**
+最終更新: 2026-04-26
+現在のフェーズ: **Phase 1 — Sprint 2 進行中(エディタ完了、次はライブプレビュー)**
 
 ---
 
@@ -71,8 +71,8 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 
 ### Sprint 2: 基本編集ループ(ファイル開閉 → 編集 → プレビュー → 出力)
 
-実装順序: **(1) ファイル開閉 → (2) エディタ + LSP → (3) プレビュー → (4) PDF**。
-最低限の編集 1 ループを通すことを優先し、各機能は MVP 水準でつなぐ。
+実装順序: **(1) ファイル開閉 → (2) エディタ → (3) ライブプレビュー → (4) PDF → (5) 操作モード3種 → (6) LSP 統合**(2026-04-26 順序見直し)。
+最低限の編集 1 ループを通すことを優先し、各機能は MVP 水準でつなぐ。typst.app 風の 2 ペイン UI に早く近づけるためライブプレビューを LSP より先に着手する方針。
 
 #### (1) Tauri シェル、ファイル/フォルダ開閉(c7be3c4 で完了)
 - [x] `tauri-plugin-dialog` 追加(`tauri-plugin-fs` は使わず Rust 側 command で完結 = ハイブリッド方式 C)
@@ -81,21 +81,19 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] dirty 状態管理(`*` マーク、`onCloseRequested` で終了時の確認)
 - [ ] Open Folder(将来のファイルツリー用、最低限のディレクトリ選択)— **Sprint 2 (2) 以降に繰越**(現時点で不要)
 
-#### (2) CodeMirror 6 + Tinymist LSP 統合
-- [ ] CodeMirror 6 を Svelte に組み込み(`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`, `@codemirror/language`)
-- [ ] Typst 用 syntax highlighting(`codemirror-lang-typst` などを評価、無ければ自前 Lezer grammar)
-- [ ] **エディタ操作モード3種ビルトイン**(差別化ポイント、設定で切替):
-  - [ ] OS 標準(CodeMirror 6 デフォルトキーマップ)
-  - [ ] vim(`@replit/codemirror-vim`、MIT)
-  - [ ] emacs(`@replit/codemirror-emacs`、MIT)
-  - [ ] 設定永続化(Tauri store plugin or 自前 JSON)
-- [ ] Tauri バックエンドから tinymist を subprocess spawn(stdio JSON-RPC)
-- [ ] LSP クライアント実装(または `vscode-languageclient` 流用検討)
-- [ ] 補完 / 診断 / hover / 定義ジャンプ / format をエディタに配線
+#### (2) CodeMirror 6 + Typst syntax highlight
+- [x] CodeMirror 6 を Svelte に組み込み(`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`)— commit `977c59b`
+- [x] dirty 状態で終了確認 → 「はい」で閉じない問題を修正(`core:window:allow-destroy` 追加)— commit `38b3017`
+- [x] Typst 用 syntax highlighting(`codemirror-lang-typst` v0.4.0、Apache-2.0、Typst 公式 typst-syntax を WASM 化)— commit `2d576d6`
+  - [x] `vite-plugin-wasm` + `vite-plugin-top-level-await` 導入(WASM ESM 対応)
+  - [x] SvelteKit hydration の TDZ 回避のため Editor.svelte を動的 import
+  - [x] One Dark 風の自前 HighlightStyle を `Prec.highest` で同梱版に優先させる
+  - [x] `t.list`(`-` `+`)・`t.definitionOperator`(`/`)など Typst 固有タグをカバー
 
-#### (3) Live preview pane
+#### (3) Live preview pane(順序を上げて Sprint 2 内で先行実装)
 - [ ] tinymist preview を起動(`tinymist preview` サブコマンド)
 - [ ] WebSocket 接続、incremental SVG 受信
+- [ ] +page.svelte を 2 ペイン化(左: エディタ、右: SVG プレビュー)
 - [ ] エディタ ←→ preview の同期スクロール
 - [ ] 編集→反映のレイテンシ確認
 
@@ -111,6 +109,23 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [ ] スライド
 - [ ] Harano Aji フォント同梱
 - [ ] 日本語 UI(i18n 基盤)
+
+#### (5) エディタ操作モード3種ビルトイン(差別化ポイント、設定で切替)
+- [ ] OS 標準(CodeMirror 6 デフォルトキーマップ)
+- [ ] vim(`@replit/codemirror-vim`、MIT)
+- [ ] emacs(`@replit/codemirror-emacs`、MIT)
+- [ ] 設定永続化(`tauri-plugin-store` 採用予定)
+
+#### (6) Tinymist LSP 統合(実装重く最後に)
+- [ ] Tauri バックエンドから tinymist を subprocess spawn(stdio JSON-RPC)
+- [ ] LSP クライアント実装(または `vscode-languageclient` 流用検討)
+- [ ] 補完 / 診断 / hover / 定義ジャンプ / format をエディタに配線
+
+#### Phase 1 で並行して仕込む下準備(AI エージェント連携の素地)
+- [ ] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理
+- [ ] 文書状態(全文・カーソル・選択範囲・dirty)の JSON シリアライズ可能性確保
+- [ ] Tauri Store の設定領域に `ai.*` サブカテゴリを切っておく(値は空でよい)
+- [ ] `@codemirror/merge`(MIT)を評価(後で AI 提案 diff を見せる UI の素地)
 
 ### 配布
 - [ ] winget で配布可能にする
@@ -130,16 +145,25 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] 表・数式・画像挿入 GUI ボタン(差別化ポイント #4)
 - [ ] パッケージ管理 UI(Typst Universe 連携)
 - [ ] テンプレートギャラリー
+- [ ] **内蔵 AI 機能の最小実装**(段落整え・補完・テンプレート穴埋め支援)
+  - [ ] LLM プロバイダ抽象(Anthropic / OpenAI / ローカル LLM 切替可能に)
+  - [ ] API キーの安全な保存(`tauri-plugin-stronghold` または OS キーチェーン)
+  - [ ] 差分プレビュー → ユーザ確認 → 適用の二段フロー
+  - [ ] 非同期ジョブキュー(UI ブロックなし、ストリーミング応答対応)
 - [ ] v0.2.0 リリース
 
 ---
 
-## Phase 3: WYSIWYG-lite モード(差別化の本丸)
+## Phase 3: WYSIWYG-lite モード(差別化の本丸) + 外部エージェント連携
 
 - [ ] AST ベース dual-rendering 設計書作成
 - [ ] 見出し・強調・引用の記法非表示化(PoC)
 - [ ] カーソル位置での記法表示切り替え
 - [ ] 表・リスト等の WYSIWYG 化
+- [ ] **Yuhitsu を MCP サーバとして公開**(Claude Cowork 等の外部エージェントから制御可能化)
+  - [ ] `@modelcontextprotocol/sdk`(MIT)で Yuhitsu の操作を MCP ツールとして公開
+  - [ ] read_document / apply_edit / get_diagnostics / compile などのツール定義
+  - [ ] 外部からの編集にもユーザ確認フローを通す権限モデル
 - [ ] v0.3.0 リリース
 
 ---
@@ -190,3 +214,18 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - **エディタ操作モード3種ビルトイン**(氏指示):OS 標準 / vim / emacs を標準装備、設定で切替
   - 採用ライブラリ:CodeMirror 6 デフォルト + `@replit/codemirror-vim` + `@replit/codemirror-emacs`(全て MIT、Apache-2.0 互換)
   - vim/emacs ユーザーを取り込みつつ、非エンジニアには OS 標準を提供する両取り戦略
+
+### 2026-04-26: Sprint 2 順序見直し + AI エージェント連携の長期方針
+- **Sprint 2 順序を組み替え**(氏承認):**(1) ファイル開閉 → (2) エディタ + Typst syntax → (3) ライブプレビュー → (4) PDF → (5) 操作モード3種 → (6) LSP 統合**
+  - 理由:typst.app 風の 2 ペイン UI に早く近づけて視覚的な完成度を先に上げるため、ライブプレビューを LSP より先行させる。LSP は実装が一番重く、優先度最後で問題なし
+- **AI エージェント連携を長期方針として確立**(氏承認):
+  - プロトコルは **MCP(Model Context Protocol)** に乗る前提
+  - **Phase 1**:実装はしないが、構造として下準備(エディタ操作 API レイヤ、状態シリアライズ、設定領域分離、`@codemirror/merge` 評価)
+  - **Phase 2**:内蔵 AI 機能の最小実装(LLM プロバイダ抽象、API キー保護、diff プレビュー、非同期ジョブ)
+  - **Phase 3**:Yuhitsu を MCP サーバ化、外部エージェント(Claude Cowork 等)から制御可能に
+  - 避ける:特定ベンダー SDK の直 import / 同期前提 UI / 暗黙の編集適用 / AI 必須化 / 平文 API キー保存 / GPL 系ライブラリ混入
+- **Sprint 2 (1)〜(2) の実装完了状況**:
+  - ファイル開閉(`c7be3c4`)
+  - 終了確認バグ修正(`38b3017`、`core:window:allow-destroy` 追加)
+  - CodeMirror 6 素導入(`977c59b`)
+  - Typst 構文ハイライト統合(`2d576d6`、`codemirror-lang-typst` v0.4.0 + `vite-plugin-wasm`)
