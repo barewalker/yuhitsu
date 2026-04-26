@@ -7,7 +7,15 @@
     open as openDialog,
     save as saveDialog,
   } from "@tauri-apps/plugin-dialog";
-  import Editor from "$lib/Editor.svelte";
+  import type { Component } from "svelte";
+
+  // Editor.svelte は codemirror-lang-typst → typst-syntax の WASM を読み込む。
+  // SvelteKit の hydration 中に top-level await の解決順序が噛み合わず TDZ を踏むため、
+  // onMount で動的 import して hydration 完了後にロードする。
+  let Editor = $state<Component<{
+    value: string;
+    onChange?: (next: string) => void;
+  }> | null>(null);
 
   type FileDoc = { path: string; content: string };
 
@@ -103,6 +111,8 @@
         });
         if (ok) await win.destroy();
       });
+      const mod = await import("$lib/Editor.svelte");
+      Editor = mod.default;
     })();
     return () => unlisten?.();
   });
@@ -118,7 +128,11 @@
     <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
     {#if status}<span class="status">{status}</span>{/if}
   </header>
-  <Editor value={content} onChange={onEditorChange} />
+  {#if Editor}
+    <Editor value={content} onChange={onEditorChange} />
+  {:else}
+    <div class="loading">エディタを読み込み中…</div>
+  {/if}
 </div>
 
 <style>
@@ -178,5 +192,14 @@
   .app :global(.cm-host) {
     flex: 1;
     min-height: 0;
+  }
+
+  .loading {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6a6a6a;
+    font-size: 13px;
   }
 </style>

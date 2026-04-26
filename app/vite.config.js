@@ -1,12 +1,16 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import wasm from "vite-plugin-wasm";
+import topLevelAwait from "vite-plugin-top-level-await";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [sveltekit()],
+  // codemirror-lang-typst が WASM 化された Typst 公式パーサ(typst-syntax)を読み込む。
+  // Vite 標準では .wasm の ESM import を扱えないため wasm + top-level-await プラグインで補う。
+  plugins: [wasm(), topLevelAwait(), sveltekit()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
