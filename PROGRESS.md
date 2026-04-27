@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-04-27
-現在のフェーズ: **Phase 1 — Sprint 2 主要ループ完了(編集 → プレビュー → PDF 出力が一周)**
+最終更新: 2026-04-28
+現在のフェーズ: **Phase 1 — Sprint 2 完了(エディタ/プレビュー/PDF/操作モード3種/LSP すべて MVP 稼働)**
 
 ---
 
@@ -126,9 +126,14 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] ツールバーのセレクトボックス UI(日本語ラベル: 標準 / vim / emacs)
 
 #### (6) Tinymist LSP 統合(実装重く最後に)
-- [ ] Tauri バックエンドから tinymist を subprocess spawn(stdio JSON-RPC)
-- [ ] LSP クライアント実装(または `vscode-languageclient` 流用検討)
-- [ ] 補完 / 診断 / hover / 定義ジャンプ / format をエディタに配線
+- [x] Tauri バックエンドから tinymist lsp を subprocess spawn(stdio JSON-RPC、Content-Length ベースのフレーミングを Rust 側で処理)— commit `72d4f4d`
+- [x] LSP クライアントは `@codemirror/lsp-client` v6.2.3(MIT、CodeMirror 公式)を採用
+- [x] 補完(`#l` で `let` `link` 等のポップアップ): 動作
+- [x] 診断(typo・引数エラーで赤波線): 動作
+- [x] hover(関数名にカーソルを当ててツールチップ): 動作
+- [ ] 定義ジャンプ / format / signature help / rename(Phase 2 以降で改善)
+- [ ] hover の Markdown 整形改善(現状は素のままで素っ気ない)
+- [ ] 未閉鎖の数式など、tinymist 側の挙動依存の診断改善
 
 #### Phase 1 で並行して仕込む下準備(AI エージェント連携の素地)
 - [ ] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理
