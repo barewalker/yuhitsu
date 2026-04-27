@@ -20,6 +20,7 @@
   type FileDoc = { path: string; content: string };
 
   const FILTERS = [{ name: "Typst", extensions: ["typ"] }];
+  const PDF_FILTERS = [{ name: "PDF", extensions: ["pdf"] }];
   const PREVIEW_URL = "http://127.0.0.1:23625/";
   // tinymist preview の HTTP サーバが立ち上がるまでの待機時間(暫定)。
   // 後で HTTP プローブに置き換える前提。
@@ -29,6 +30,17 @@
   let content = $state("");
   let dirty = $state(false);
   let status = $state("");
+  let statusKind = $state<"info" | "error">("error");
+
+  function setStatus(message: string, kind: "info" | "error" = "error") {
+    status = message;
+    statusKind = kind;
+  }
+
+  function clearStatus() {
+    status = "";
+    statusKind = "error";
+  }
 
   type PreviewStatus = "idle" | "starting" | "ready" | "error";
   let previewStatus = $state<PreviewStatus>("idle");
@@ -73,10 +85,10 @@
       path = doc.path;
       content = doc.content;
       dirty = false;
-      status = "";
+      clearStatus();
       await startPreview(doc.path);
     } catch (e) {
-      status = String(e);
+      setStatus(String(e));
     }
   }
 
@@ -91,12 +103,12 @@
       const isNewPath = path !== selected;
       path = selected;
       dirty = false;
-      status = "";
+      clearStatus();
       if (isNewPath) {
         await startPreview(selected);
       }
     } catch (e) {
-      status = String(e);
+      setStatus(String(e));
     }
   }
 
@@ -108,10 +120,55 @@
     try {
       await invoke("save_file", { path, content });
       dirty = false;
-      status = "";
+      clearStatus();
       // tinymist がファイル変更を watch しているので start_preview 再起動は不要
     } catch (e) {
-      status = String(e);
+      setStatus(String(e));
+    }
+  }
+
+  // 入力 .typ ファイルパスから既定の出力 .pdf パスを組み立てる
+  function defaultPdfPath(typPath: string): string {
+    return typPath.replace(/\.typ$/i, ".pdf");
+  }
+
+  async function exportPdf() {
+    if (!path) {
+      setStatus("PDF を書き出す前に、ファイルを保存してください。");
+      return;
+    }
+    // 編集中の内容を反映させるため、未保存があれば自動で保存する。
+    // ユーザにそのことを伝えたいので、自動保存の有無を覚えておく。
+    let savedAutomatically = false;
+    if (dirty) {
+      try {
+        await invoke("save_file", { path, content });
+        dirty = false;
+        savedAutomatically = true;
+      } catch (e) {
+        setStatus(String(e));
+        return;
+      }
+    }
+    let outputPath: string;
+    try {
+      const selected = await saveDialog({
+        filters: PDF_FILTERS,
+        defaultPath: defaultPdfPath(path),
+      });
+      if (!selected) return;
+      outputPath = selected;
+    } catch (e) {
+      setStatus(String(e));
+      return;
+    }
+    setStatus("PDF を書き出し中…", "info");
+    try {
+      await invoke("export_pdf", { input: path, output: outputPath });
+      const prefix = savedAutomatically ? "保存してから " : "";
+      setStatus(`${prefix}PDF を書き出しました: ${outputPath}`, "info");
+    } catch (e) {
+      setStatus(String(e));
     }
   }
 
@@ -139,6 +196,9 @@
     } else if (key === "s" && e.shiftKey) {
       e.preventDefault();
       saveAs();
+    } else if (key === "e" && !e.shiftKey) {
+      e.preventDefault();
+      exportPdf();
     }
   }
 
@@ -177,8 +237,11 @@
     <button onclick={openFile}>開く</button>
     <button onclick={save}>保存</button>
     <button onclick={saveAs}>名前を付けて保存</button>
+    <button onclick={exportPdf} disabled={!path}>PDF 出力</button>
     <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
-    {#if status}<span class="status">{status}</span>{/if}
+    {#if status}
+      <span class="status status-{statusKind}">{status}</span>
+    {/if}
   </header>
 
   <div class="workspace">
@@ -253,6 +316,17 @@
     background: #4a4a4a;
   }
 
+  .toolbar button:disabled {
+    color: #6a6a6a;
+    background: #2f2f2f;
+    border-color: #3a3a3a;
+    cursor: not-allowed;
+  }
+
+  .toolbar button:disabled:hover {
+    background: #2f2f2f;
+  }
+
   .filename {
     margin-left: 8px;
     font-size: 13px;
@@ -262,7 +336,18 @@
   .status {
     margin-left: auto;
     font-size: 12px;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-error {
     color: #ff8080;
+  }
+
+  .status-info {
+    color: #98c379;
   }
 
   .workspace {

@@ -75,6 +75,26 @@ fn stop_preview(state: State<'_, PreviewState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn export_pdf(input: String, output: String) -> Result<(), String> {
+    let input_path = PathBuf::from(&input);
+    // Typst の絶対パス参照(/foo.png のような書き方)はプロジェクトルートからの解決
+    // となるため、root は入力ファイルの親ディレクトリを既定値にしておく。
+    let root = input_path
+        .parent()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| ".".to_string());
+    let result = Command::new("tinymist")
+        .args(["compile", "--root", &root, &input, &output])
+        .output()
+        .map_err(|e| format!("failed to spawn tinymist compile: {}", e))?;
+    if !result.status.success() {
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        return Err(format!("compile failed:\n{}", stderr.trim()));
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -85,7 +105,8 @@ pub fn run() {
             open_file,
             save_file,
             start_preview,
-            stop_preview
+            stop_preview,
+            export_pdf
         ])
         .on_window_event(|window, event| {
             // ウィンドウが閉じられた時(終了確認後の destroy 含む)に preview を必ず止める
