@@ -8,14 +8,38 @@
     save as saveDialog,
   } from "@tauri-apps/plugin-dialog";
   import type { Component } from "svelte";
+  import {
+    type EditorMode,
+    loadSettings,
+    saveEditorMode,
+  } from "$lib/settings";
 
   // Editor.svelte は codemirror-lang-typst → typst-syntax の WASM を読み込む。
   // SvelteKit の hydration 中に top-level await の解決順序が噛み合わず TDZ を踏むため、
   // onMount で動的 import して hydration 完了後にロードする。
   let Editor = $state<Component<{
     value: string;
+    mode?: EditorMode;
     onChange?: (next: string) => void;
   }> | null>(null);
+
+  let editorMode = $state<EditorMode>("default");
+
+  const EDITOR_MODE_LABELS: Record<EditorMode, string> = {
+    default: "標準",
+    vim: "vim",
+    emacs: "emacs",
+  };
+
+  async function changeEditorMode(next: EditorMode) {
+    editorMode = next;
+    try {
+      await saveEditorMode(next);
+    } catch (e) {
+      // 永続化失敗は致命的でないので info で控えめに通知
+      setStatus(`設定保存に失敗: ${String(e)}`, "error");
+    }
+  }
 
   type FileDoc = { path: string; content: string };
 
@@ -223,6 +247,14 @@
           await win.destroy();
         }
       });
+      // 設定の読み込みは hydration 後に。Tauri Store は async API なので
+      // onMount で起動時に1回読む。失敗時はデフォルトを使う。
+      try {
+        const settings = await loadSettings();
+        editorMode = settings.editor.mode;
+      } catch (e) {
+        console.warn("settings load failed, using defaults:", e);
+      }
       const mod = await import("$lib/Editor.svelte");
       Editor = mod.default;
     })();
@@ -238,6 +270,18 @@
     <button onclick={save}>保存</button>
     <button onclick={saveAs}>名前を付けて保存</button>
     <button onclick={exportPdf} disabled={!path}>PDF 出力</button>
+    <label class="mode-select">
+      操作モード:
+      <select
+        value={editorMode}
+        onchange={(e) =>
+          changeEditorMode((e.currentTarget as HTMLSelectElement).value as EditorMode)}
+      >
+        {#each Object.entries(EDITOR_MODE_LABELS) as [value, label]}
+          <option {value}>{label}</option>
+        {/each}
+      </select>
+    </label>
     <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
     {#if status}
       <span class="status status-{statusKind}">{status}</span>
@@ -247,7 +291,7 @@
   <div class="workspace">
     <div class="editor-pane">
       {#if Editor}
-        <Editor value={content} onChange={onEditorChange} />
+        <Editor value={content} mode={editorMode} onChange={onEditorChange} />
       {:else}
         <div class="placeholder">エディタを読み込み中…</div>
       {/if}
@@ -325,6 +369,25 @@
 
   .toolbar button:disabled:hover {
     background: #2f2f2f;
+  }
+
+  .mode-select {
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #b0b0b0;
+  }
+
+  .mode-select select {
+    background: #3a3a3a;
+    color: #e6e6e6;
+    border: 1px solid #4a4a4a;
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+    cursor: pointer;
   }
 
   .filename {

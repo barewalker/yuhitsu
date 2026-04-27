@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { EditorState, Prec } from "@codemirror/state";
+  import {
+    Compartment,
+    EditorState,
+    Prec,
+    type Extension,
+  } from "@codemirror/state";
   import {
     EditorView,
     keymap,
@@ -16,6 +21,9 @@
   import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
   import { tags as t } from "@lezer/highlight";
   import { typst } from "codemirror-lang-typst";
+  import { vim } from "@replit/codemirror-vim";
+  import { emacs } from "@replit/codemirror-emacs";
+  import type { EditorMode } from "$lib/settings";
 
   // ダーク背景向けに One Dark 風の配色を自前定義
   // (パッケージ同梱の TypstHighlightSytle はライト背景前提で黒に埋没するため不採用)
@@ -63,15 +71,33 @@
 
   type Props = {
     value: string;
+    mode?: EditorMode;
     onChange?: (next: string) => void;
   };
 
-  let { value, onChange }: Props = $props();
+  let { value, mode = "default", onChange }: Props = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
   // 外部 value 反映と updateListener のループを防ぐためのフラグ
   let applyingExternal = false;
+
+  // mode を切り替えた時に extension を再構成なしで差し替えるための入れ物。
+  // vim/emacs プラグインは optional で、default モードでは何も入れない。
+  const modeCompartment = new Compartment();
+
+  function modeExtension(target: EditorMode): Extension {
+    switch (target) {
+      case "vim":
+        // vim プラグインは ex コマンドや Normal/Insert モードを定義するため、
+        // 他のキーマップより優先される必要がある(プラグイン側で済ませている)
+        return vim();
+      case "emacs":
+        return emacs();
+      default:
+        return [];
+    }
+  }
 
   const theme = EditorView.theme(
     {
@@ -121,6 +147,9 @@
     const state = EditorState.create({
       doc: value,
       extensions: [
+        // mode 切替用 Compartment は他の extension より前に置く。
+        // vim/emacs はキーマップを高い優先度で要求するため。
+        modeCompartment.of(modeExtension(mode)),
         lineNumbers(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
@@ -157,6 +186,14 @@
     } finally {
       applyingExternal = false;
     }
+  });
+
+  // mode prop が変わったら Compartment を reconfigure して即座に反映
+  $effect(() => {
+    if (!view) return;
+    view.dispatch({
+      effects: modeCompartment.reconfigure(modeExtension(mode)),
+    });
   });
 </script>
 
