@@ -118,10 +118,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] 日本語 UI(i18n 基盤)
 
 #### (5) エディタ操作モード3種ビルトイン(差別化ポイント、設定で切替)
-- [ ] OS 標準(CodeMirror 6 デフォルトキーマップ)
-- [ ] vim(`@replit/codemirror-vim`、MIT)
-- [ ] emacs(`@replit/codemirror-emacs`、MIT)
-- [ ] 設定永続化(`tauri-plugin-store` 採用予定)
+- [x] OS 標準(CodeMirror 6 デフォルトキーマップ)
+- [x] vim(`@replit/codemirror-vim` v6.3.0、MIT)
+- [x] emacs(`@replit/codemirror-emacs` v6.1.0、MIT)
+- [x] 設定永続化(`tauri-plugin-store` v2.4.2、MIT)— commit `d241c6a`
+- [x] Compartment による動的切替(再マウント不要)
+- [x] ツールバーのセレクトボックス UI(日本語ラベル: 標準 / vim / emacs)
 
 #### (6) Tinymist LSP 統合(実装重く最後に)
 - [ ] Tauri バックエンドから tinymist を subprocess spawn(stdio JSON-RPC)
@@ -131,7 +133,7 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 #### Phase 1 で並行して仕込む下準備(AI エージェント連携の素地)
 - [ ] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理
 - [ ] 文書状態(全文・カーソル・選択範囲・dirty)の JSON シリアライズ可能性確保
-- [ ] Tauri Store の設定領域に `ai.*` サブカテゴリを切っておく(値は空でよい)
+- [x] Tauri Store の設定領域に `ai.*` サブカテゴリを切る — 操作モード実装の副産物として完了(`$lib/settings.ts` の Settings 型に領域確保済み)
 - [ ] `@codemirror/merge`(MIT)を評価(後で AI 提案 diff を見せる UI の素地)
 
 ### 配布
