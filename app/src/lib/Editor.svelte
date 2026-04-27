@@ -23,7 +23,12 @@
   import { typst } from "codemirror-lang-typst";
   import { vim } from "@replit/codemirror-vim";
   import { emacs } from "@replit/codemirror-emacs";
+  import {
+    LSPClient,
+    languageServerSupport,
+  } from "@codemirror/lsp-client";
   import type { EditorMode } from "$lib/settings";
+  import { pathToFileUri } from "$lib/lsp";
 
   // ダーク背景向けに One Dark 風の配色を自前定義
   // (パッケージ同梱の TypstHighlightSytle はライト背景前提で黒に埋没するため不採用)
@@ -72,10 +77,20 @@
   type Props = {
     value: string;
     mode?: EditorMode;
+    /** LSP セッションが立ち上がっていればそのクライアント、なければ null */
+    lspClient?: LSPClient | null;
+    /** 現在編集中ファイルの絶対パス。LSP に渡す URI 構築に使う */
+    filePath?: string | null;
     onChange?: (next: string) => void;
   };
 
-  let { value, mode = "default", onChange }: Props = $props();
+  let {
+    value,
+    mode = "default",
+    lspClient = null,
+    filePath = null,
+    onChange,
+  }: Props = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
@@ -97,6 +112,18 @@
       default:
         return [];
     }
+  }
+
+  // LSP の有効/無効と対象ファイルの切替に追従するための Compartment。
+  // languageServerSupport は LSPClient + URI + languageId が揃って初めて有効。
+  const lspCompartment = new Compartment();
+
+  function lspExtension(
+    client: LSPClient | null,
+    file: string | null,
+  ): Extension {
+    if (!client || !file) return [];
+    return languageServerSupport(client, pathToFileUri(file), "typst");
   }
 
   const theme = EditorView.theme(
@@ -150,6 +177,7 @@
         // mode 切替用 Compartment は他の extension より前に置く。
         // vim/emacs はキーマップを高い優先度で要求するため。
         modeCompartment.of(modeExtension(mode)),
+        lspCompartment.of(lspExtension(lspClient, filePath)),
         lineNumbers(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
@@ -193,6 +221,14 @@
     if (!view) return;
     view.dispatch({
       effects: modeCompartment.reconfigure(modeExtension(mode)),
+    });
+  });
+
+  // LSP クライアントや対象ファイルの切替を Compartment.reconfigure で反映
+  $effect(() => {
+    if (!view) return;
+    view.dispatch({
+      effects: lspCompartment.reconfigure(lspExtension(lspClient, filePath)),
     });
   });
 </script>

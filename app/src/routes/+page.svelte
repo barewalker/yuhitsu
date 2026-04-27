@@ -13,6 +13,8 @@
     loadSettings,
     saveEditorMode,
   } from "$lib/settings";
+  import type { LSPClient } from "@codemirror/lsp-client";
+  import { startLspSession, type LspSession } from "$lib/lsp";
 
   // Editor.svelte は codemirror-lang-typst → typst-syntax の WASM を読み込む。
   // SvelteKit の hydration 中に top-level await の解決順序が噛み合わず TDZ を踏むため、
@@ -20,8 +22,13 @@
   let Editor = $state<Component<{
     value: string;
     mode?: EditorMode;
+    lspClient?: LSPClient | null;
+    filePath?: string | null;
     onChange?: (next: string) => void;
   }> | null>(null);
+
+  let lspSession = $state<LspSession | null>(null);
+  let lspClient = $derived(lspSession?.client ?? null);
 
   let editorMode = $state<EditorMode>("default");
 
@@ -73,6 +80,30 @@
   // 起動完了タイミングで cache-buster を載せて確実に再ロードさせる
   let previewSrc = $state<string | null>(null);
 
+  async function ensureLspFor(forPath: string) {
+    // 別ファイルへの切替も含め、既存セッションは止めて新規に張り直す。
+    if (lspSession) {
+      await lspSession.shutdown();
+      lspSession = null;
+    }
+    try {
+      lspSession = await startLspSession(forPath);
+    } catch (e) {
+      // LSP が起動しなくてもエディタ自体は使えるので、エラー表示のみ
+      setStatus(`LSP 起動に失敗: ${String(e)}`);
+    }
+  }
+
+  async function stopLspSession() {
+    if (!lspSession) return;
+    try {
+      await lspSession.shutdown();
+    } catch (e) {
+      console.warn("[lsp] shutdown failed:", e);
+    }
+    lspSession = null;
+  }
+
   async function startPreview(forPath: string) {
     previewStatus = "starting";
     previewError = "";
@@ -110,7 +141,7 @@
       content = doc.content;
       dirty = false;
       clearStatus();
-      await startPreview(doc.path);
+      await Promise.all([startPreview(doc.path), ensureLspFor(doc.path)]);
     } catch (e) {
       setStatus(String(e));
     }
@@ -129,7 +160,7 @@
       dirty = false;
       clearStatus();
       if (isNewPath) {
-        await startPreview(selected);
+        await Promise.all([startPreview(selected), ensureLspFor(selected)]);
       }
     } catch (e) {
       setStatus(String(e));
@@ -232,8 +263,9 @@
       const win = getCurrentWindow();
       unlisten = await win.onCloseRequested(async (event) => {
         if (!dirty) {
-          // dirty でなくても preview の subprocess は止めたい
+          // dirty でなくても preview / LSP の subprocess は止めたい
           await stopPreview();
+          await stopLspSession();
           return;
         }
         // preventDefault は同期で呼ぶ必要があるため、await より前に必ず呼ぶ
@@ -244,6 +276,7 @@
         });
         if (ok) {
           await stopPreview();
+          await stopLspSession();
           await win.destroy();
         }
       });
@@ -291,7 +324,13 @@
   <div class="workspace">
     <div class="editor-pane">
       {#if Editor}
-        <Editor value={content} mode={editorMode} onChange={onEditorChange} />
+        <Editor
+          value={content}
+          mode={editorMode}
+          {lspClient}
+          filePath={path}
+          onChange={onEditorChange}
+        />
       {:else}
         <div class="placeholder">エディタを読み込み中…</div>
       {/if}
