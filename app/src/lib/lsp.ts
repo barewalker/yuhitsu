@@ -71,7 +71,12 @@ export type LspSession = {
  * - tinymist lsp を spawn(Tauri command 経由)
  * - Transport を準備し、Tauri event を購読
  * - LSPClient を connect、initialize の rootUri はファイルの親ディレクトリ
- *   を file://形式で渡す
+ *   を渡す。`file:///` のようなファイルシステムルート相当を渡すと tinymist
+ *   が "entry is not in any set root directory" でフォールバックし、補完・
+ *   診断・hover 全体が壊れるため避ける。
+ *   note: 副作用として、`#image("/abs")` の hover URL は rootUri 起点で
+ *   解釈されるが、preview / PDF は Rust 側で `--root /` を渡しているので
+ *   実コンパイルには影響しない。
  */
 export async function startLspSession(filePath: string): Promise<LspSession> {
   await invoke("lsp_start");

@@ -29,6 +29,138 @@ fn save_file(path: String, content: String) -> Result<(), String> {
     fs::write(&buf, content).map_err(|e| format!("failed to write {}: {}", buf.display(), e))
 }
 
+// プロジェクトビュー用のディレクトリエントリ。再帰的に子を持つ可能性がある。
+// 全ファイル表示。隠しファイル(`.` 始まり)と定番ノイズフォルダだけ除外する。
+#[derive(Serialize)]
+struct DirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+    children: Option<Vec<DirEntry>>,
+}
+
+// ビルド成果物・パッケージマネージャ管理ディレクトリ・IDE 個別キャッシュなど、
+// 文書プロジェクト用途では雑音にしかならないフォルダ。`.` 始まりは別途除外。
+const NOISE_DIRS: &[&str] = &[
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    "out",
+    "__pycache__",
+    ".svelte-kit",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".cache",
+    ".idea",
+    ".vscode",
+];
+const PROJECT_VIEW_MAX_DEPTH: usize = 8;
+
+fn read_dir_recursive(path: &PathBuf, depth: usize) -> Result<Vec<DirEntry>, String> {
+    let entries = fs::read_dir(path)
+        .map_err(|e| format!("failed to read {}: {}", path.display(), e))?;
+    let mut dirs: Vec<DirEntry> = Vec::new();
+    let mut files: Vec<DirEntry> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        // 隠しファイル / フォルダ
+        if name.starts_with('.') {
+            continue;
+        }
+        let entry_path = entry.path();
+        let metadata = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if metadata.is_dir() {
+            if NOISE_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            // 深さ制限を超えたら子を読まない(空ディレクトリ表示)
+            let children = if depth + 1 < PROJECT_VIEW_MAX_DEPTH {
+                read_dir_recursive(&entry_path, depth + 1).ok()
+            } else {
+                Some(Vec::new())
+            };
+            dirs.push(DirEntry {
+                name,
+                path: entry_path.to_string_lossy().into_owned(),
+                is_dir: true,
+                children,
+            });
+        } else if metadata.is_file() {
+            files.push(DirEntry {
+                name,
+                path: entry_path.to_string_lossy().into_owned(),
+                is_dir: false,
+                children: None,
+            });
+        }
+    }
+    dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    let mut combined: Vec<DirEntry> = dirs;
+    combined.extend(files);
+    Ok(combined)
+}
+
+#[tauri::command]
+fn list_directory(path: String) -> Result<DirEntry, String> {
+    let buf = PathBuf::from(&path);
+    if !buf.is_dir() {
+        return Err(format!("not a directory: {}", buf.display()));
+    }
+    let name = buf
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.clone());
+    let children = read_dir_recursive(&buf, 0)?;
+    Ok(DirEntry {
+        name,
+        path,
+        is_dir: true,
+        children: Some(children),
+    })
+}
+
+// 開発時のフロント側ログを Rust の stderr に流すための bridge。
+// `pnpm tauri dev` のログに `[js]` プレフィックス付きで出るので、
+// Claude や開発者が WebView の DevTools を開かずに状況把握できる。
+// 製品リリース前に削除するか、release ビルドでは no-op にする。
+#[tauri::command]
+fn dev_log(message: String) {
+    eprintln!("[js] {message}");
+}
+
+// Typst の `--root` に渡すプロジェクトルート。
+// Linux/macOS は `/`、Windows は入力パスのドライブ。tinymist は cwd を
+// 起点に root を相対化することがあり、cwd と root が食い違うと "entry
+// file must be in the root directory" で弾かれるため、subprocess 起動
+// 時に cwd もここで返す値に合わせる(`spawn_root_dir` の方を参照)。
+fn filesystem_root_for(path: &str) -> String {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = path;
+        "/".to_string()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::Component;
+        PathBuf::from(path)
+            .components()
+            .next()
+            .and_then(|c| match c {
+                Component::Prefix(p) => {
+                    Some(format!("{}\\", p.as_os_str().to_string_lossy()))
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| "C:\\".to_string())
+    }
+}
+
 #[derive(Default)]
 struct PreviewState {
     // 現在動いている tinymist preview の subprocess を抱える
@@ -49,7 +181,16 @@ impl PreviewState {
 #[tauri::command]
 fn start_preview(path: String, state: State<'_, PreviewState>) -> Result<(), String> {
     state.kill_existing();
+    // Typst は絶対パス参照(`#image("/abs/...")`)を `--root` 起点で解決するため、
+    // 未指定だと入力ファイルの親ディレクトリが root になり、ホーム配下の画像など
+    // 文書外の絶対パスが読めない。Yuhitsu はローカル GUI なので、ファイルシステム
+    // ルートを root として渡す(セキュリティモデルは緩むが、ユーザ自身のファイルを
+    // 自分のエディタで読むだけなので許容)。Windows は入力パスのドライブを起点に。
+    let root = filesystem_root_for(&path);
     let child = Command::new("tinymist")
+        // tinymist が `--root` を内部で相対化する際の起点を揃える(cwd と
+        // root を一致させないと entry が root 外と判定されることがある)。
+        .current_dir(&root)
         .args([
             "preview",
             "--no-open",
@@ -57,6 +198,8 @@ fn start_preview(path: String, state: State<'_, PreviewState>) -> Result<(), Str
             "127.0.0.1:23625",
             "--control-plane-host",
             "127.0.0.1:23626",
+            "--root",
+            &root,
             &path,
         ])
         // dev 中は stderr をそのまま流したいので inherit、stdout は閉じておく
@@ -80,14 +223,12 @@ fn stop_preview(state: State<'_, PreviewState>) -> Result<(), String> {
 
 #[tauri::command]
 fn export_pdf(input: String, output: String) -> Result<(), String> {
-    let input_path = PathBuf::from(&input);
-    // Typst の絶対パス参照(/foo.png のような書き方)はプロジェクトルートからの解決
-    // となるため、root は入力ファイルの親ディレクトリを既定値にしておく。
-    let root = input_path
-        .parent()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| ".".to_string());
+    // preview と同じく filesystem ルートを `--root` に渡す。文書外の絶対パスを
+    // 読みたい(例: ホーム配下のスクショ画像)用途に合わせる。
+    let root = filesystem_root_for(&input);
     let result = Command::new("tinymist")
+        // start_preview と同じく cwd を root に揃える
+        .current_dir(&root)
         .args(["compile", "--root", &root, &input, &output])
         .output()
         .map_err(|e| format!("failed to spawn tinymist compile: {}", e))?;
@@ -257,12 +398,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_file,
             save_file,
+            list_directory,
             start_preview,
             stop_preview,
             export_pdf,
             lsp_start,
             lsp_send,
-            lsp_stop
+            lsp_stop,
+            dev_log
         ])
         .on_window_event(|window, event| {
             // ウィンドウが閉じられた時(終了確認後の destroy 含む)に
