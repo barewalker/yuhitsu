@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
 最終更新: 2026-04-28
-現在のフェーズ: **Phase 1 — Sprint 2 完了 → Sprint 3 着手予定(一般ユーザに「コードを書かせない」橋渡し)**
+現在のフェーズ: **Phase 1 — Sprint 3 進行中(GUI 挿入ボタン最小・拡張セット完了、ツールバーをカタログ駆動化、キーバインド一括登録)**
 
 ---
 
@@ -136,7 +136,7 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] 未閉鎖の数式など、tinymist 側の挙動依存の診断改善
 
 #### Phase 1 で並行して仕込む下準備(AI エージェント連携の素地)
-- [ ] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理
+- [x] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理 — Sprint 3 (3) で `$lib/commands.ts` のコマンドカタログ化が完了。`{ id, label, run, ... }` の形で 19 種を集約し、ツールバー / キーバインド / 設定永続化が同じ ID を参照する。MCP ハンドラから呼ぶ際もこのカタログを再利用できる構造
 - [ ] 文書状態(全文・カーソル・選択範囲・dirty)の JSON シリアライズ可能性確保
 - [x] Tauri Store の設定領域に `ai.*` サブカテゴリを切る — 操作モード実装の副産物として完了(`$lib/settings.ts` の Settings 型に領域確保済み)
 - [ ] `@codemirror/merge`(MIT)を評価(後で AI 提案 diff を見せる UI の素地)
@@ -144,8 +144,52 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 #### Sprint 3: 一般ユーザに「コードを書かせない」ための橋渡し(2026-04-28 氏合意で Phase 2 前倒し着手)
 **狙い**: 現状の「Typst を書ける人にとって便利な GUI」から「コード非経験層が文書を作れる GUI」へ転換する。Yuhitsu のターゲット(事務・営業・CUI 苦手な技術者)が初めてアプリを開いた時の体験を変える。
 - [ ] **起動時テンプレート選択ダイアログ**(新規ドキュメント時に「業務報告書」「議事録」「論文」などのカードから選び、ガイドコメント入りで開く)
-- [ ] **GUI 挿入ボタン最小セット**(太字・斜体・見出し・箇条書きリスト・番号付きリスト)
-- [ ] **GUI 挿入ボタン拡張セット**(表・画像・数式・脚注・引用・コード・リンク)
+- [x] **GUI 挿入ボタン最小セット**(太字・斜体・見出し H1〜H3・箇条書きリスト・番号付きリスト)
+  - [x] `$lib/editor-commands.ts`(EditorView を引数にとる純粋関数群、UI 非依存)
+  - [x] Editor.svelte に `onReady` / `onTeardown` コールバックを追加し view を親に公開
+  - [x] ツールバーに B / I / H1 / H2 / H3 / • / 1. ボタン(`title` でホバー説明)
+  - [x] Ctrl+B / Ctrl+I のショートカット(view 不在時はパススルーで vim Normal モードと共存)
+  - [x] 行頭マーカー切替時のインデント保持、トグル動作(同種なら除去・別種なら置換・なしなら付与)
+- [x] **GUI 挿入ボタン拡張セット**(表・画像・数式・脚注・引用・コード(インライン/ブロック)・リンク)
+  - [x] `$lib/commands.ts` 新設:全コマンド(ファイル系 + 挿入系 19 種)を `{ id, label, icon, buttonClass, defaultKey, needsEditor, run }` でカタログ化
+  - [x] `$lib/editor-commands.ts` に `toggleMath` / `toggleInlineCode` / `insertCodeBlock` / `insertLink` / `insertFootnote` / `insertQuote` / `insertTable` / `insertImage` を追加
+  - [x] 表は最小 2x2 を挿入、`insertTable(view, { columns, rows })` 引数化(将来「列数指定モーダル」を増設しやすい形に)
+  - [x] 画像は `#figure(image("..."), caption: [|])` で挿入し caption にカーソル(テンプレート側 `#show figure: ...` でスタイル統一できる Typst 流儀)
+  - [x] ツールバーを設定駆動に書き換え(`toolbarItems: ToolbarItem[]` を `{#each}` で描画、divider もデータ表現)
+  - [x] ボタンを Lucide ピクトグラム化(`@lucide/svelte` v1.14、ISC、tree-shakable な個別 import)
+  - [x] キーバインド一括登録(`onKeydown` がカタログを順次照合、`effectiveKey` で override → defaultKey の順)
+  - [x] プリセット 3 種(標準 / ミニマル / 論文寄り)を `TOOLBAR_PRESETS` で内蔵
+  - [x] 画像挿入はファイル選択ダイアログ +(`getCurrentWebview().onDragDropEvent` 経由の)ウィンドウ D&D、ファイル相対パスへ自動正規化(`../` を含む完全相対化)
+  - [x] tinymist の `--root` を filesystem ルート(Linux/Mac は `/`、Windows は入力ドライブ)に統一(preview / PDF)。LSP の rootUri は workspace 機能のためファイルの親ディレクトリのまま
+  - [x] hover 等に出る外部 URL クリックは `tauri-plugin-opener` 経由で OS デフォルトに流す
+  - [x] dev_log bridge(JS → Rust stderr)を追加し、開発時にフロントログを Rust 出力で確認可能
+- [x] **ワークスペース表示制御**(Sprint 3 中に氏の要望で追加)
+  - [x] プレビュー on/off トグル(ツールバーボタン + Ctrl+Shift+P、`toggle-preview` コマンドとしてカタログ化)
+  - [x] エディタ / プレビュー境界の可変リサイズ(pointer events ベースのスプリッタ、最小/最大 10〜90%)
+  - [x] 設定永続化(`workspace.previewVisible` / `workspace.editorPaneRatio` を Tauri Store に保存)
+  - [x] 既存設定への migration(`toggle-preview` を末尾に自動追加)
+- [x] **プロジェクトビュー(サイドバー、Sprint 2 (1) からの繰越を Sprint 3 内で回収)**
+  - [x] Rust `list_directory` コマンド(全ファイル表示、隠しファイル + 定番ノイズフォルダ(`node_modules` / `target` / `.git` / `.svelte-kit` 等)を除外、深さ制限 8)
+  - [x] フロント `$lib/project.ts` + `ProjectTree.svelte`(再帰描画は Svelte 5 流の self-import)
+  - [x] ファイルアイコンを拡張子で分岐(`.typ` / `.pdf` / 画像 / その他汎用)
+  - [x] フォルダ選択(`@tauri-apps/plugin-dialog` の `directory: true`)、永続化(`workspace.currentFolder`)、起動時自動復元
+  - [x] ツリーからのファイル切替:`.typ` はエディタで開く(dirty 時の確認込み、現在ファイルのハイライト)、それ以外(PDF / 画像 / 任意)は `openUrl` で OS デフォルトに流す
+  - [x] サイドバー on/off + 幅リサイズ(`workspace.projectViewVisible` / `workspace.projectPaneRatio`)、`toggle-project-view` コマンド + Ctrl+Shift+E
+  - [x] 既存設定への migration(`open-folder` / `toggle-project-view` を自動追加)
+- [ ] プロジェクトビューの拡張(右クリックメニュー、新規・リネーム・削除、git status 連携)
+- [x] **タブ機能 + テキストファイル対応**(Sprint 3 中に氏の要望で追加、競合 Typstudio との比較で必要性が浮上)
+  - [x] Tab 型(`{ id, path, content, dirty, cursorAnchor, cursorHead, scrollTop }`)、複数同時編集
+  - [x] 既存タブ再利用(同じパスならそれを active に)/ 空タブ再利用(無題かつ未編集のタブは差し替え)/ 新規タブ追加
+  - [x] タブ切替時にカーソル / スクロール位置を per-tab で保持(`Editor.svelte` の `onValueApplied` フックで親が復元)
+  - [x] タブを閉じる(dirty 時の確認 / 全閉じで空タブ自動生成)
+  - [x] ツールバー:`new-tab`(Ctrl+T)/ `close-tab`(Ctrl+W)を追加、各タブに ✕ ボタンと「+」新規ボタン
+  - [x] テキストファイル全般を開けるよう `openFile` のフィルタ撤廃、ツリーからは `.typ` / `.md` / `.csv` 等のテキスト系はタブで、バイナリは `openUrl` で OS デフォルト
+  - [x] Typst 以外のファイルでは構文ハイライトを plain に、LSP / preview / PDF 機能を無効化(`Editor.svelte` に `languageMode` Compartment 追加)
+- [ ] タブの永続化(次回起動時に開いていたタブを復元)
+- [x] タブの D&D 並び替え(HTML5 Drag and Drop API、依存追加なし、ドラッグ中は半透明 + ドロップ先に左ボーダー)
+- [ ] Ctrl+Tab 切替 / 中ボタン閉じ(後回し)
+- [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
+- [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
 
 ### 配布
@@ -253,6 +297,39 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - 終了確認バグ修正(`38b3017`、`core:window:allow-destroy` 追加)
   - CodeMirror 6 素導入(`977c59b`)
   - Typst 構文ハイライト統合(`2d576d6`、`codemirror-lang-typst` v0.4.0 + `vite-plugin-wasm`)
+
+### 2026-04-29: タブ機能 + プロジェクトビュー + テキストファイル対応
+- 競合 Typstudio に「ExplorerTree / SidePanel」があるのを契機に、Yuhitsu にも以下を一括追加:プロジェクトビュー(サイドバー)、タブ機能、テキストファイル全般対応
+- **プロジェクトビュー**:Rust `list_directory`(全ファイル表示・ノイズフォルダ除外)、`ProjectTree.svelte`(Svelte 5 self-import で再帰描画)、フォルダ選択 + 永続化 + 起動時自動復元、サイドバー on/off + 幅リサイズ、ツリーから `.typ` はタブで開く・PDF/画像はバイナリは OS デフォルトに流す
+- **タブ機能**:`{ id, path, content, dirty, cursorAnchor, cursorHead, scrollTop }` を per-tab で管理、`+` ボタン + Ctrl+T で新規、各タブに ✕ + Ctrl+W、ファイル open は同じパスがあれば既存 active に・空タブを再利用・なければ新規追加。タブ切替時に位置復元
+- **テキストファイル対応**:`.md` / `.txt` / `.csv` / `.bib` / `.yaml` / `.json` / `.toml` / `.html` / `.rs` 等をタブで編集可能。`Editor.svelte` に `languageMode` Compartment を追加し、Typst 以外は plain。LSP / preview / PDF は Typst のみ動作
+- **トラブル / 解決した workaround**:
+  - 起動時 LSP rootUri を `file:///` にすると tinymist が `entry is not in any set root directory` でフォールバック → 親ディレクトリに戻し、preview / PDF 側だけ `--root /`(filesystem root)に拡張(絶対パス画像が読める)
+  - `codemirror-lang-typst` v0.4.0 の WASM パーサが「Typst 言語拡張が有効な状態で大規模 replace edit(タブ切替の全置換)」を処理できず `Unreachable code should not be executed` で落ちる → Editor.svelte の `$effect` を 3 段階 dispatch(lang Compartment 一旦外す → doc 全置換 → 再有効化)に変更
+  - フロント側ログを直接見るために `dev_log` Tauri command + `$lib/dev-log.ts` を新設(JS → Rust stderr)。`pnpm tauri dev` のログから `[js] ...` 行を読めるので、DevTools を開かずデバッグ可能に
+
+### 2026-04-28: Sprint 3 (3) — GUI 挿入ボタン拡張セット + ツールバー駆動化
+- **氏方針**:ツールバーはユーザがメニュー構造を柔軟に変更できる設計に。デフォルトとプリセットを用意した上で自分でいじれること。ショートカットも設定可能。D&D 編集 UI は後回しで OK
+- 実装:
+  - `$lib/commands.ts` を新設し、全コマンド(ファイル系 + 挿入系 19 種)を ID 中心のカタログに集約。`{ id, label, buttonText, buttonClass, defaultKey, needsEditor, run }` を共通形式とし、ツールバー / キーバインド / 設定永続化 / 将来の MCP から同じ ID で参照
+  - 挿入コマンドを `editor-commands.ts` に追加実装(数式 / インラインコード = 既存 `toggleInlineWrap` を `$` `` ` `` で再利用、コードブロック / リンク / 脚注 / 引用 / 表 / 画像)
+  - 表は `insertTable(view, { columns?, rows? })` で引数化(MVP は 2x2、後で「列数指定モーダル」を増設しやすい形)
+  - ツールバーを `toolbarItems: ToolbarItem[]` の配列駆動に書き換え、divider も `"divider"` という ID として扱う
+  - キーバインドは `onKeydown` がカタログを順次照合する一括方式に(`effectiveKey = override ?? defaultKey`、`matchKey` で `Mod-Shift-b` 形式を判定)。`needsEditor` のコマンドは view 不在時にパススルーするので vim Normal モードと共存
+  - プリセット 3 種(標準 / ミニマル / 論文寄り)を `TOOLBAR_PRESETS` で内蔵
+  - `settings.ts` に `toolbar.items` と `keybindings` 領域を追加。`saveToolbarItems` / `saveKeybindings` を export
+  - 画像挿入はファイル選択ダイアログ(`@tauri-apps/plugin-dialog` の open + 拡張子フィルタ)と、`getCurrentWebview().onDragDropEvent` 経由のウィンドウ D&D の両入り口
+  - 画像パスは現在編集中の `.typ` のディレクトリを基準に相対パス化(同階層・サブ階層のみ。それ以外は絶対パスを `/` 区切りで)
+- 残:D&D 編集 UI(`svelte-dnd-action` 採用予定)/ キーバインド設定 UI / 起動時テンプレート選択ダイアログ / フォーム型テンプレート簡素版
+
+### 2026-04-28: Sprint 3 着手 — GUI 挿入ボタン最小セット完了
+- **Sprint 3 (2)** GUI 挿入ボタン最小セットを実装(太字・斜体・見出し H1〜H3・箇条書き・番号付き)
+  - `$lib/editor-commands.ts` を新設し、`EditorView` を引数にとる純粋関数として `toggleBold` / `toggleItalic` / `applyHeading` / `toggleBulletList` / `toggleNumberedList` を定義(UI 非依存)
+  - これは Phase 1 の下準備「エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理」の第一歩を兼ねる
+  - Editor.svelte は `onReady(view)` / `onTeardown()` で view を親に公開、+page.svelte 側がコマンドを呼ぶ
+  - Ctrl+B / Ctrl+I は editorView が無いと preventDefault しない(vim Normal モードでの ページ送り等と共存)
+  - 行頭マーカーは「同種ならトグル除去 / 別種なら置換 / なしなら付与」、インデントを保持
+- 残り Sprint 3 項目:起動時テンプレート選択ダイアログ / GUI 挿入ボタン拡張セット / フォーム型テンプレート簡素版
 
 ### 2026-04-28: Sprint 2 完了 + Yuhitsu の長期ポジション確定
 - **Sprint 2 (3)〜(6) すべて MVP として動作**:
