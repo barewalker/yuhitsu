@@ -1,0 +1,12 @@
+{
+  "icon": "Users",
+  "category": "business",
+  "title": {
+    "ja": "議事録",
+    "en": "Meeting Minutes"
+  },
+  "description": {
+    "ja": "会議の日時・参加者・議題・決定事項・宿題を整理する雛形。",
+    "en": "Capture meeting date, attendees, agenda, decisions, and action items."
+  }
+}

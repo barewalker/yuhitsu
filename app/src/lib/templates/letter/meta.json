@@ -1,0 +1,12 @@
+{
+  "icon": "Mail",
+  "category": "business",
+  "title": {
+    "ja": "簡易レター",
+    "en": "Letter"
+  },
+  "description": {
+    "ja": "差出人・宛先・本文・署名を整えた書状の雛形。",
+    "en": "Standard letter with sender, recipient, body, and signature."
+  }
+}

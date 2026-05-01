@@ -1,0 +1,12 @@
+{
+  "icon": "Presentation",
+  "category": "presentation",
+  "title": {
+    "ja": "スライド",
+    "en": "Slides"
+  },
+  "description": {
+    "ja": "16:9 横長ページのスライド雛形。素のページ分割版(touying 統合は将来予定)。",
+    "en": "Plain 16:9 slide deck. Bare page-break version; touying integration planned later."
+  }
+}

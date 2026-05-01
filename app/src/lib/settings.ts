@@ -19,9 +19,29 @@ export type EditorMode = "default" | "vim" | "emacs";
 
 export type ThemeMode = "auto" | "light" | "dark";
 
+/** UI / テンプレートカード等の表示言語。"auto" は navigator.language から推測、
+    未対応なら "en" にフォールバックする。当面は ja/en の 2 言語のみ対応。 */
+export type LocaleMode = "auto" | "ja" | "en";
+
 export type AppearanceSettings = {
   /** "auto" は OS の prefers-color-scheme に追従、"light"/"dark" は固定 */
   theme: ThemeMode;
+  /** UI とテンプレ表示の言語選択。テンプレート本文は ja.typ/en.typ を切替 */
+  locale: LocaleMode;
+};
+
+/** ドキュメント生成系の設定。テンプレ展開時の用紙、将来のフォント等。 */
+export type PaperSize = "auto" | "a4" | "letter" | "b5";
+
+export type DocumentSettings = {
+  /** "auto" は locale から推測(ja→a4、en→letter)、明示指定すれば優先 */
+  paperSize: PaperSize;
+};
+
+/** 一過性のフラグ群(初回起動済み等)。設定 UI に出さない内部状態。 */
+export type FlagsSettings = {
+  /** 起動時テンプレ選択ダイアログを 1 回でも消化したか */
+  firstRunDone: boolean;
 };
 
 export type ToolbarSettings = {
@@ -53,6 +73,8 @@ export type Settings = {
     mode: EditorMode;
   };
   appearance: AppearanceSettings;
+  document: DocumentSettings;
+  flags: FlagsSettings;
   toolbar: ToolbarSettings;
   keybindings: KeybindingsSettings;
   workspace: WorkspaceSettings;
@@ -67,6 +89,13 @@ const DEFAULT_SETTINGS: Settings = {
   },
   appearance: {
     theme: "auto",
+    locale: "auto",
+  },
+  document: {
+    paperSize: "auto",
+  },
+  flags: {
+    firstRunDone: false,
   },
   toolbar: {
     items: getDefaultToolbarItems(),
@@ -93,6 +122,16 @@ function isEditorMode(value: unknown): value is EditorMode {
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === "auto" || value === "light" || value === "dark";
+}
+
+function isLocaleMode(value: unknown): value is LocaleMode {
+  return value === "auto" || value === "ja" || value === "en";
+}
+
+function isPaperSize(value: unknown): value is PaperSize {
+  return (
+    value === "auto" || value === "a4" || value === "letter" || value === "b5"
+  );
 }
 
 function isToolbarItem(value: unknown): value is ToolbarItem {
@@ -191,6 +230,9 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
 export async function loadSettings(): Promise<Settings> {
   const editorMode = await store.get<unknown>("editor.mode");
   const themeMode = await store.get<unknown>("appearance.theme");
+  const localeMode = await store.get<unknown>("appearance.locale");
+  const paperSize = await store.get<unknown>("document.paperSize");
+  const firstRunDone = await store.get<unknown>("flags.firstRunDone");
   const toolbarItems = await store.get<unknown>("toolbar.items");
   const keybindings = await store.get<unknown>("keybindings");
   const workspace = await store.get<unknown>("workspace");
@@ -205,6 +247,20 @@ export async function loadSettings(): Promise<Settings> {
       theme: isThemeMode(themeMode)
         ? themeMode
         : DEFAULT_SETTINGS.appearance.theme,
+      locale: isLocaleMode(localeMode)
+        ? localeMode
+        : DEFAULT_SETTINGS.appearance.locale,
+    },
+    document: {
+      paperSize: isPaperSize(paperSize)
+        ? paperSize
+        : DEFAULT_SETTINGS.document.paperSize,
+    },
+    flags: {
+      firstRunDone:
+        typeof firstRunDone === "boolean"
+          ? firstRunDone
+          : DEFAULT_SETTINGS.flags.firstRunDone,
     },
     toolbar: {
       items: parseToolbarItems(toolbarItems),
@@ -225,6 +281,21 @@ export async function saveEditorMode(mode: EditorMode): Promise<void> {
 
 export async function saveTheme(theme: ThemeMode): Promise<void> {
   await store.set("appearance.theme", theme);
+  await store.save();
+}
+
+export async function saveLocale(locale: LocaleMode): Promise<void> {
+  await store.set("appearance.locale", locale);
+  await store.save();
+}
+
+export async function savePaperSize(paperSize: PaperSize): Promise<void> {
+  await store.set("document.paperSize", paperSize);
+  await store.save();
+}
+
+export async function saveFirstRunDone(done: boolean): Promise<void> {
+  await store.set("flags.firstRunDone", done);
   await store.save();
 }
 

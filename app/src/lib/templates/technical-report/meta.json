@@ -1,0 +1,12 @@
+{
+  "icon": "FlaskConical",
+  "category": "academic",
+  "title": {
+    "ja": "技術報告書",
+    "en": "Technical Report"
+  },
+  "description": {
+    "ja": "概要 / はじめに / 方法 / 結果 / 考察 / 結論 / 参考文献 構成の論文寄り雛形。",
+    "en": "Academic-style report with abstract, methods, results, discussion, and bibliography."
+  }
+}

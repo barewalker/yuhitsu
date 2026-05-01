@@ -1,0 +1,12 @@
+{
+  "icon": "File",
+  "category": "general",
+  "title": {
+    "ja": "空ドキュメント",
+    "en": "Empty Document"
+  },
+  "description": {
+    "ja": "最低限の設定だけ入った白紙の文書。一から書き始める時に。",
+    "en": "Blank document with minimal setup. Start from scratch."
+  }
+}

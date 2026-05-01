@@ -1,0 +1,12 @@
+{
+  "icon": "FileText",
+  "category": "business",
+  "title": {
+    "ja": "業務報告書",
+    "en": "Business Report"
+  },
+  "description": {
+    "ja": "日報・週報・月報の雛形。対象期間・実施内容・所感を埋めて使う。",
+    "en": "Template for daily / weekly / monthly business reports."
+  }
+}

@@ -6,10 +6,12 @@ import type { EditorView } from "@codemirror/view";
 import type { LucideIcon } from "@lucide/svelte";
 import Asterisk from "@lucide/svelte/icons/asterisk";
 import Bold from "@lucide/svelte/icons/bold";
+import BookOpen from "@lucide/svelte/icons/book-open";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
 import FilePlus from "@lucide/svelte/icons/file-plus";
+import FilePlus2 from "@lucide/svelte/icons/file-plus-2";
 import FolderOpen from "@lucide/svelte/icons/folder-open";
 import FolderTree from "@lucide/svelte/icons/folder-tree";
 import PanelLeft from "@lucide/svelte/icons/panel-left";
@@ -45,6 +47,7 @@ import {
 
 export const COMMAND_IDS = [
   "new-tab",
+  "new-from-template",
   "open-file",
   "open-folder",
   "save",
@@ -66,6 +69,7 @@ export const COMMAND_IDS = [
   "quote",
   "image",
   "table",
+  "bibliography",
   "toggle-project-view",
   "toggle-preview",
 ] as const;
@@ -89,9 +93,11 @@ export interface CommandContext {
   saveAs: () => void | Promise<void>;
   exportPdf: () => void | Promise<void>;
   pickAndInsertImage: () => void | Promise<void>;
+  pickAndInsertBibliography: () => void | Promise<void>;
   togglePreview: () => void | Promise<void>;
   toggleProjectView: () => void | Promise<void>;
   newTab: () => void | Promise<void>;
+  newFromTemplate: () => void | Promise<void>;
   closeActiveTab: () => void | Promise<void>;
 }
 
@@ -130,6 +136,14 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     defaultKey: "Mod-t",
     needsEditor: false,
     run: (ctx) => ctx.newTab(),
+  },
+  "new-from-template": {
+    id: "new-from-template",
+    label: "テンプレートから新規",
+    icon: FilePlus2,
+    defaultKey: "Mod-Shift-t",
+    needsEditor: false,
+    run: (ctx) => ctx.newFromTemplate(),
   },
   "open-file": {
     id: "open-file",
@@ -286,6 +300,13 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: true,
     run: editorRun((v) => insertTable(v)),
   },
+  bibliography: {
+    id: "bibliography",
+    label: "参考文献ファイルを挿入",
+    icon: BookOpen,
+    needsEditor: true,
+    run: (ctx) => ctx.pickAndInsertBibliography(),
+  },
   "toggle-project-view": {
     id: "toggle-project-view",
     label: "プロジェクトビュー表示切替",
@@ -321,6 +342,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
     label: "標準",
     items: [
       "new-tab",
+      "new-from-template",
       "open-file",
       "open-folder",
       "save",
@@ -343,6 +365,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "quote",
       "image",
       "table",
+      "bibliography",
       "divider",
       "toggle-project-view",
       "toggle-preview",
@@ -373,6 +396,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
     label: "論文寄り",
     items: [
       "new-tab",
+      "new-from-template",
       "open-file",
       "open-folder",
       "save",
@@ -392,6 +416,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "link",
       "image",
       "table",
+      "bibliography",
       "divider",
       "toggle-project-view",
       "toggle-preview",

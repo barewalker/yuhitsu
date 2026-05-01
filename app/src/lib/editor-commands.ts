@@ -209,6 +209,27 @@ export function insertImage(view: EditorView, path: string) {
   view.focus();
 }
 
+// 参考文献ファイル(.bib / .yml)へのパスを `#bibliography("...")` で挿入する。
+// 既に同等の呼び出しがある場合は重複登録になるが、ユーザが手動で消す前提。
+// ドキュメント末尾に挿入(参考文献は通常本文の最後)、画像挿入と同じく
+// 行頭でない場合は改行を補う。
+export function insertBibliography(view: EditorView, path: string) {
+  const escaped = path.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const insertText = `#bibliography("${escaped}")`;
+  const { state } = view;
+  const docEnd = state.doc.length;
+  const tailLine = state.doc.lineAt(docEnd);
+  const tailChars = state.doc.sliceString(tailLine.from, docEnd).trim();
+  const prefix = tailChars.length > 0 ? "\n\n" : "";
+  const finalInsert = prefix + insertText;
+  view.dispatch({
+    changes: { from: docEnd, to: docEnd, insert: finalInsert },
+    selection: EditorSelection.cursor(docEnd + finalInsert.length),
+    scrollIntoView: true,
+  });
+  view.focus();
+}
+
 // 選択範囲を delim でラップする。既にラップされていれば外す。
 // 複数選択(矩形選択含む)も changeByRange で個別に処理。
 function toggleInlineWrap(view: EditorView, delim: string) {

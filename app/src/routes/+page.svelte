@@ -15,16 +15,22 @@
   import {
     type EditorMode,
     type KeybindingsSettings,
+    type LocaleMode,
+    type PaperSize,
     type ThemeMode,
     loadSettings,
+    saveFirstRunDone,
     saveWorkspace,
   } from "$lib/settings";
   import type { LSPClient } from "@codemirror/lsp-client";
   import { pathToFileUri, startLspSession, type LspSession } from "$lib/lsp";
   import type { EditorView } from "@codemirror/view";
-  import { insertImage } from "$lib/editor-commands";
+  import { insertBibliography, insertImage } from "$lib/editor-commands";
   import { listDirectory, type DirEntry } from "$lib/project";
   import ProjectTree from "$lib/ProjectTree.svelte";
+  import TemplateDialog from "$lib/TemplateDialog.svelte";
+  import { resolveLocale, type Locale } from "$lib/i18n/locale";
+  import { listTemplates, resolveTemplate } from "$lib/templates";
   import {
     COMMANDS,
     COMMAND_IDS,
@@ -58,6 +64,14 @@
 
   let editorMode = $state<EditorMode>("default");
   let themeMode = $state<ThemeMode>("auto");
+  let localeMode = $state<LocaleMode>("auto");
+  let paperSize = $state<PaperSize>("auto");
+  let firstRunDone = $state(true); // 起動時に loadSettings で本物の値に上書き
+  let templateDialogOpen = $state(false);
+
+  // localeMode → 解決後の "ja" / "en"。テンプレ表示等で使う。
+  let resolvedLocale = $derived<Locale>(resolveLocale(localeMode));
+  const allTemplates = listTemplates();
 
   // ツールバーの並び・キーバインドは設定で書き換え可能。
   // 設定読み込み完了までは getDefaultToolbarItems() を表示する。
@@ -109,6 +123,8 @@
       editorMode = settings.editor.mode;
       themeMode = settings.appearance.theme;
       applyTheme(themeMode);
+      localeMode = settings.appearance.locale;
+      paperSize = settings.document.paperSize;
       toolbarItems = settings.toolbar.items;
       keybindings = settings.keybindings;
       statusbarVisible = settings.workspace.statusbarVisible;
@@ -608,13 +624,74 @@
       saveAs,
       exportPdf,
       pickAndInsertImage,
+      pickAndInsertBibliography,
       togglePreview,
       toggleProjectView,
       newTab: addEmptyTab,
+      newFromTemplate: openTemplateDialog,
       closeActiveTab: () => {
         if (activeTabId) closeTab(activeTabId);
       },
     };
+  }
+
+  // ----- テンプレート選択ダイアログ関連 -----
+  function openTemplateDialog() {
+    templateDialogOpen = true;
+  }
+
+  // ダイアログを閉じる時に必ず firstRunDone を立てる(初回起動時の唯一の表示機会
+  // を消化したことを記録、二回目以降は出さない)。失敗してもログだけ。
+  function markFirstRunDone() {
+    if (firstRunDone) return;
+    firstRunDone = true;
+    saveFirstRunDone(true).catch((e) => {
+      console.warn("flags.firstRunDone save failed:", e);
+    });
+  }
+
+  function onTemplateCancel() {
+    templateDialogOpen = false;
+    markFirstRunDone();
+  }
+
+  // テンプレを選んだ時:active タブが空タブ(path 無し・未編集)なら content だけ
+  // 差し替え、そうでなければ新規タブを作って差し替える。Typst でない初期状態の
+  // タブは preview/LSP が止まっているので、必要なら起動。
+  function onTemplateSelect(id: string) {
+    const tpl = resolveTemplate(id, resolvedLocale, paperSize);
+    if (!tpl) {
+      setStatus(`テンプレートが見つかりません: ${id}`, "error");
+      templateDialogOpen = false;
+      markFirstRunDone();
+      return;
+    }
+    captureActiveTabState();
+    const current = getActiveTab();
+    const reuseEmpty =
+      current !== null && current.path === null && !current.dirty;
+    if (reuseEmpty && current) {
+      current.content = tpl.body;
+      current.dirty = true;
+      current.cursorAnchor = 0;
+      current.cursorHead = 0;
+      current.scrollTop = 0;
+    } else {
+      const tab: Tab = {
+        id: newTabId(),
+        path: null,
+        content: tpl.body,
+        dirty: true,
+        cursorAnchor: 0,
+        cursorHead: 0,
+        scrollTop: 0,
+      };
+      tabs = [...tabs, tab];
+      activeTabId = tab.id;
+    }
+    templateDialogOpen = false;
+    markFirstRunDone();
+    clearStatus();
   }
 
   function togglePreview() {
@@ -868,6 +945,25 @@
     }
   }
 
+  // 参考文献ファイル(.bib / .yml)を選んでドキュメント末尾に
+  // #bibliography("...") を挿入する。Typst は両形式をネイティブ対応。
+  async function pickAndInsertBibliography() {
+    if (!editorView) return;
+    try {
+      const selected = await openDialog({
+        multiple: false,
+        filters: [
+          { name: "参考文献", extensions: ["bib", "yml", "yaml"] },
+        ],
+      });
+      if (typeof selected !== "string") return;
+      const rel = await toRelativePath(selected);
+      insertBibliography(editorView, rel);
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
   function basename(p: string | null): string {
     if (!p) return "(無題)";
     const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
@@ -952,6 +1048,9 @@
         editorMode = settings.editor.mode;
         themeMode = settings.appearance.theme;
         applyTheme(themeMode);
+        localeMode = settings.appearance.locale;
+        paperSize = settings.document.paperSize;
+        firstRunDone = settings.flags.firstRunDone;
         toolbarItems = settings.toolbar.items;
         keybindings = settings.keybindings;
         previewVisible = settings.workspace.previewVisible;
@@ -963,6 +1062,10 @@
         // 前回開いていたフォルダを復元(失敗しても致命的でない)
         if (currentFolder) {
           await loadProjectTree(currentFolder);
+        }
+        // 初回起動時のみテンプレ選択ダイアログを自動表示
+        if (!firstRunDone) {
+          templateDialogOpen = true;
         }
       } catch (e) {
         console.warn("settings load failed, using defaults:", e);
@@ -1222,6 +1325,15 @@
         <span class="counter" data-slot="word"></span>
       </span>
     </footer>
+  {/if}
+
+  {#if templateDialogOpen}
+    <TemplateDialog
+      templates={allTemplates}
+      locale={resolvedLocale}
+      onSelect={onTemplateSelect}
+      onCancel={onTemplateCancel}
+    />
   {/if}
 </div>
 
