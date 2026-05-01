@@ -1406,8 +1406,10 @@
 
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    /* gap は wrap した時の行間にも効く。横方向 8px / 縦 6px で詰まりすぎない */
+    gap: 6px 8px;
     padding: 8px 12px;
     background: var(--bg-elevated-2);
     border-bottom: 1px solid var(--border);
@@ -1439,10 +1441,12 @@
   }
 
   .toolbar-divider {
+    /* wrap 時に行高に合わせて伸びると違和感があるので、center + 固定高さに */
     width: 1px;
-    align-self: stretch;
+    height: 18px;
+    align-self: center;
     background: var(--border);
-    margin: 2px 4px;
+    margin: 0 4px;
   }
 
   .toolbar button.icon-btn {
