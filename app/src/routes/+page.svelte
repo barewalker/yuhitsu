@@ -371,15 +371,17 @@
     }
   }
 
-  async function saveAs() {
+  // 戻り値: 保存に成功したら true、ユーザがキャンセル / エラーなら false。
+  // closeTab 等から「保存できたか」で次の動作を分岐するために使う。
+  async function saveAs(): Promise<boolean> {
     const tab = getActiveTab();
-    if (!tab) return;
+    if (!tab) return false;
     try {
       const selected = await saveDialog({
         filters: FILTERS,
         defaultPath: tab.path ?? "untitled.typ",
       });
-      if (!selected) return;
+      if (!selected) return false;
       await invoke("save_file", { path: selected, content: tab.content });
       const isNewPath = tab.path !== selected;
       tab.path = selected;
@@ -392,25 +394,28 @@
           await Promise.all([stopPreview(), stopLspSession()]);
         }
       }
+      return true;
     } catch (e) {
       setStatus(String(e));
+      return false;
     }
   }
 
-  async function save() {
+  async function save(): Promise<boolean> {
     const tab = getActiveTab();
-    if (!tab) return;
+    if (!tab) return false;
     if (!tab.path) {
-      await saveAs();
-      return;
+      return await saveAs();
     }
     try {
       await invoke("save_file", { path: tab.path, content: tab.content });
       tab.dirty = false;
       clearStatus();
       // tinymist がファイル変更を watch しているので start_preview 再起動は不要
+      return true;
     } catch (e) {
       setStatus(String(e));
+      return false;
     }
   }
 
@@ -588,11 +593,28 @@
     const tab = getTab(targetId);
     if (!tab) return;
     if (tab.dirty) {
-      const ok = await ask("未保存の変更があります。破棄して閉じますか?", {
+      // 無題タブと既存ファイルでメッセージを変える(無題なら "名前をつけて保存")
+      const isUntitled = tab.path === null;
+      const message = isUntitled
+        ? "未保存の変更があります。名前をつけて保存しますか?"
+        : "未保存の変更があります。保存しますか?";
+      const wantsSave = await ask(message, {
         title: "右筆",
         kind: "warning",
+        okLabel: "保存",
+        cancelLabel: "保存しない",
       });
-      if (!ok) return;
+      if (wantsSave) {
+        // save / saveAs は active タブを操作するので、対象タブが active で
+        // ない場合は先に切り替える。
+        if (activeTabId !== targetId) {
+          await switchTab(targetId);
+        }
+        const saved = isUntitled ? await saveAs() : await save();
+        // 保存ダイアログでキャンセルされた等で保存に失敗したらタブを残す
+        if (!saved) return;
+      }
+      // wantsSave === false なら破棄して閉じる(下に進む)
     }
     const idx = tabs.findIndex((t) => t.id === targetId);
     if (idx < 0) return;
