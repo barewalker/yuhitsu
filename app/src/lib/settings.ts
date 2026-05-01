@@ -177,6 +177,36 @@ function parseToolbarItems(raw: unknown): ToolbarItem[] {
     // 一番左に置く(VSCode のタブ風 UX に合わせる)
     filtered = ["new-tab", ...filtered];
   }
+  if (!filtered.includes("new-from-template")) {
+    // new-tab の直後に挟む(テンプレ起動の動線を新規タブの隣に)
+    const idx = filtered.indexOf("new-tab");
+    if (idx >= 0) {
+      filtered = [
+        ...filtered.slice(0, idx + 1),
+        "new-from-template",
+        ...filtered.slice(idx + 1),
+      ];
+    } else {
+      filtered = ["new-from-template", ...filtered];
+    }
+  }
+  if (!filtered.includes("bibliography")) {
+    // 表 (table) の直後に。挿入系の末尾に置くのが自然
+    const idx = filtered.indexOf("table");
+    if (idx >= 0) {
+      filtered = [
+        ...filtered.slice(0, idx + 1),
+        "bibliography",
+        ...filtered.slice(idx + 1),
+      ];
+    } else {
+      filtered = [...filtered, "bibliography"];
+    }
+  }
+  if (!filtered.includes("open-settings")) {
+    // ツールバーの右端に追加(設定は最も右が VSCode 流)
+    filtered = [...filtered, "open-settings"];
+  }
   return filtered;
 }
 
@@ -228,6 +258,15 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
 }
 
 export async function loadSettings(): Promise<Settings> {
+  // Yuhitsu 内で settings.json を直接 fs::write した場合、Tauri Store は
+  // メモリにキャッシュした古い値を返す。Yuhitsu 経由・外部エディタ経由
+  // どちらの編集も拾うため、毎回 reload で強制再読み込みする。
+  try {
+    await store.reload();
+  } catch {
+    // 初回など、まだファイルが無い場合は reload が失敗する。無視して
+    // 後段の get でデフォルトに落とす。
+  }
   const editorMode = await store.get<unknown>("editor.mode");
   const themeMode = await store.get<unknown>("appearance.theme");
   const localeMode = await store.get<unknown>("appearance.locale");

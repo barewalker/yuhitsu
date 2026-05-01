@@ -68,6 +68,9 @@
   let paperSize = $state<PaperSize>("auto");
   let firstRunDone = $state(true); // 起動時に loadSettings で本物の値に上書き
   let templateDialogOpen = $state(false);
+  // settings.json の絶対パス。起動時に Rust から取得して保持し、
+  // save() でこのパスに書いたら自動で reloadSettings を呼ぶための比較用。
+  let settingsPath = $state<string | null>(null);
 
   // localeMode → 解決後の "ja" / "en"。テンプレ表示等で使う。
   let resolvedLocale = $derived<Locale>(resolveLocale(localeMode));
@@ -411,6 +414,11 @@
       await invoke("save_file", { path: tab.path, content: tab.content });
       tab.dirty = false;
       clearStatus();
+      // settings.json を保存したら即時に再読み込み(focus イベント任せだと
+      // タブ切替だけでは発火しないので、保存契機で確実に反映させる)
+      if (settingsPath && tab.path === settingsPath) {
+        await reloadSettings();
+      }
       // tinymist がファイル変更を watch しているので start_preview 再起動は不要
       return true;
     } catch (e) {
@@ -654,6 +662,7 @@
       closeActiveTab: () => {
         if (activeTabId) closeTab(activeTabId);
       },
+      openSettings,
     };
   }
 
@@ -962,6 +971,19 @@
       if (typeof selected !== "string") return;
       const rel = await toRelativePath(selected);
       insertImage(editorView, rel);
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  // 設定ファイル(settings.json)を Yuhitsu 自身のタブで開く。
+  // 編集 → Ctrl+S で保存 → save() 内で settingsPath と一致したら自動で
+  // reloadSettings が走り、設定変更が即時反映される。
+  async function openSettings() {
+    try {
+      const path = await invoke<string>("get_settings_path");
+      settingsPath = path; // 保存時の自動再読み込み判定に使う
+      await openFileAtPath(path);
     } catch (e) {
       setStatus(String(e));
     }

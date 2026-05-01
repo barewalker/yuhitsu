@@ -387,6 +387,33 @@ async fn lsp_stop(state: State<'_, LspState>) -> Result<(), String> {
     Ok(())
 }
 
+// tauri-plugin-store が保存している settings.json の絶対パスを返す。
+// フロント側の「設定を開く」コマンドが、このパスをそのまま open_file に
+// 渡してタブで編集する用途。
+//
+// 注意: tauri-plugin-store v2 は `app_data_dir()`(Linux で
+// $XDG_DATA_HOME = ~/.local/share/<bundle-id>/)に保存する。
+// `app_config_dir()`(~/.config/<bundle-id>/)とは別物で、間違えると
+// 空ファイルを別の場所に作ってしまうので app_data_dir を使う。
+//
+// 初回起動などでファイルが未作成の時はディレクトリ + 空 JSON を作成して
+// 「開けない」状態を回避する。
+#[tauri::command]
+fn get_settings_path(app: AppHandle) -> Result<String, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app_data_dir: {}", e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("failed to create data dir {}: {}", dir.display(), e))?;
+    let path = dir.join("settings.json");
+    if !path.exists() {
+        fs::write(&path, "{}\n")
+            .map_err(|e| format!("failed to seed settings.json: {}", e))?;
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -405,7 +432,8 @@ pub fn run() {
             lsp_start,
             lsp_send,
             lsp_stop,
-            dev_log
+            dev_log,
+            get_settings_path
         ])
         .on_window_event(|window, event| {
             // ウィンドウが閉じられた時(終了確認後の destroy 含む)に

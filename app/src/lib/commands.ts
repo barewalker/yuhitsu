@@ -28,6 +28,7 @@ import PanelRight from "@lucide/svelte/icons/panel-right";
 import Quote from "@lucide/svelte/icons/quote";
 import Save from "@lucide/svelte/icons/save";
 import SaveAll from "@lucide/svelte/icons/save-all";
+import Settings from "@lucide/svelte/icons/settings";
 import Sigma from "@lucide/svelte/icons/sigma";
 import TableIcon from "@lucide/svelte/icons/table";
 import {
@@ -72,6 +73,7 @@ export const COMMAND_IDS = [
   "bibliography",
   "toggle-project-view",
   "toggle-preview",
+  "open-settings",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -99,6 +101,7 @@ export interface CommandContext {
   newTab: () => void | Promise<void>;
   newFromTemplate: () => void | Promise<void>;
   closeActiveTab: () => void | Promise<void>;
+  openSettings: () => void | Promise<void>;
 }
 
 export interface CommandDef {
@@ -323,6 +326,14 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: false,
     run: (ctx) => ctx.togglePreview(),
   },
+  "open-settings": {
+    id: "open-settings",
+    label: "設定ファイルを開く",
+    icon: Settings,
+    defaultKey: "Mod-,",
+    needsEditor: false,
+    run: (ctx) => ctx.openSettings(),
+  },
 };
 
 // ツールバー上の項目。コマンド ID か区切り。
@@ -369,6 +380,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-settings",
     ],
   },
   {
@@ -389,6 +401,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-settings",
     ],
   },
   {
@@ -420,6 +433,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-settings",
     ],
   },
 ];
