@@ -4,6 +4,7 @@
     Compartment,
     EditorState,
     Prec,
+    Transaction,
     type Extension,
   } from "@codemirror/state";
   import {
@@ -78,6 +79,11 @@
 
   type Props = {
     value: string;
+    /** タブ切替で復元する state スナップショット。指定があれば
+        view.setState で完全置換し undo/redo スタックも引き継ぐ。
+        指定なしの時は value だけ反映して history をリセットする
+        (ファイル open / 新規タブの初期化用)。*/
+    externalState?: EditorState | null;
     mode?: EditorMode;
     /** "typst" なら Typst 構文ハイライト、それ以外は plain */
     languageMode?: LanguageMode;
@@ -97,6 +103,7 @@
 
   let {
     value,
+    externalState = null,
     mode = "default",
     languageMode = "typst",
     lspClient = null,
@@ -111,6 +118,9 @@
   let view: EditorView | null = null;
   // 外部 value 反映と updateListener のループを防ぐためのフラグ
   let applyingExternal = false;
+  // 直近に適用した externalState への参照。同じ参照(同タブのまま)で
+  // $effect が走った時の不要な setState を避ける。
+  let lastAppliedExternalState: EditorState | null = null;
 
   // mode を切り替えた時に extension を再構成なしで差し替えるための入れ物。
   // vim/emacs プラグインは optional で、default モードでは何も入れない。
@@ -145,9 +155,23 @@
   // Compartment。タブで Typst 以外を開いた時にプレーンテキストとして扱う。
   const langCompartment = new Compartment();
 
+  // history extension を入れる Compartment。タブ切替や file open での
+  // doc 全置換時に、reconfigure で history を作り直してリセットする。
+  // これがないと、タブ A の編集 → タブ B に切替 → タブ B で undo を押すと、
+  // 1 個の view を共有しているため A の状態にまで遡及してしまう。
+  const historyCompartment = new Compartment();
+
   function langExtension(target: LanguageMode): Extension {
     if (target === "plain") return [];
-    return [typst(), Prec.highest(syntaxHighlighting(highlightStyle))];
+    // [Phase 1 暫定 2026-05-02] Typst 用に `codemirror-lang-typst` v0.4.0 を
+    // 採用していたが、WASM Typst パーサが「単一 transaction 内に複数 changes」
+    // のケースで panic し、エディタの transaction を巻き戻す不具合がある
+    // (上流 issue #5、未修正)。具体症状はファイル末尾 #figure の caption 行
+    // 削除で「行が復活 + undo 不可」。Phase 1 段階では構文木を必要とする機能
+    // は無いので、当面は plain で運用。Phase 2 で StreamLanguage ベースの
+    // 簡易ハイライタを自作するか、上流修正待ちで戻すかを判断する。
+    return [];
+    // return [typst(), Prec.highest(syntaxHighlighting(highlightStyle))];
   }
 
   const theme = EditorView.theme(
@@ -209,7 +233,7 @@
         lineNumbers(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
-        history(),
+        historyCompartment.of(history()),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         theme,
         EditorView.lineWrapping,
@@ -235,17 +259,45 @@
   // そのため言語拡張を一旦外してから doc を入れ替え、その後で再有効化する。
   $effect(() => {
     if (!view) return;
+    // タブ切替で per-tab の state を復元するルート。externalState には
+    // doc / 選択 / undo redo / scroll などが全部入っているので、
+    // view.setState で丸ごと差し替えれば前タブの履歴が独立に保たれる。
+    if (externalState && externalState !== lastAppliedExternalState) {
+      applyingExternal = true;
+      try {
+        view.setState(externalState);
+        lastAppliedExternalState = externalState;
+        onValueApplied?.(view);
+      } finally {
+        applyingExternal = false;
+      }
+      return;
+    }
+    // externalState 経路を使わない時(ファイル open / 新規タブ / テンプレ)。
+    // doc を全置換して history をリセットする。
     const current = view.state.doc.toString();
     if (current === value) return;
     applyingExternal = true;
     try {
       view.dispatch({ effects: langCompartment.reconfigure([]) });
+      // 全置換 transaction は history に乗せない。これがないと、後で
+      // history Compartment を reconfigure しても直前 1 ステップが
+      // 残ってしまう環境がある(再現性は不安定だが安全側に倒す)。
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: value },
+        annotations: Transaction.addToHistory.of(false),
       });
+      // 新タブ・ファイル open での history クリア:Compartment を一度
+      // 空にしてから再投入することで history extension のインスタンスを
+      // 作り直し、前回のスタックを断ち切る。
+      view.dispatch({ effects: historyCompartment.reconfigure([]) });
+      view.dispatch({ effects: historyCompartment.reconfigure(history()) });
       view.dispatch({
         effects: langCompartment.reconfigure(langExtension(languageMode)),
       });
+      // setState ルートと違い externalState は使っていないので、
+      // 次回の比較でも外部復元が走らないように保持を null に揃える。
+      lastAppliedExternalState = null;
       onValueApplied?.(view);
     } finally {
       applyingExternal = false;

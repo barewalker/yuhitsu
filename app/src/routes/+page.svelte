@@ -25,6 +25,7 @@
   import type { LSPClient } from "@codemirror/lsp-client";
   import { pathToFileUri, startLspSession, type LspSession } from "$lib/lsp";
   import type { EditorView } from "@codemirror/view";
+  import type { EditorState } from "@codemirror/state";
   import { insertBibliography, insertImage } from "$lib/editor-commands";
   import { listDirectory, type DirEntry } from "$lib/project";
   import ProjectTree from "$lib/ProjectTree.svelte";
@@ -46,6 +47,7 @@
   // onMount で動的 import して hydration 完了後にロードする。
   let Editor = $state<Component<{
     value: string;
+    externalState?: EditorState | null;
     mode?: EditorMode;
     languageMode?: "typst" | "plain";
     lspClient?: LSPClient | null;
@@ -153,6 +155,16 @@
     cursorAnchor: number;
     cursorHead: number;
     scrollTop: number;
+    // タブ切替で復元する CodeMirror の state スナップショット。
+    // doc / 選択 / undo redo スタック / scroll などをまるごと保持する。
+    // 取得タイミング:タブ切替前(captureActiveTabState で view.state を控える)。
+    // 復元タイミング:Editor.svelte の $effect で view.setState(tab.editorState)。
+    editorState: EditorState | null;
+    // 無題タブで preview / LSP を有効にするための仮想 .typ パス。
+    // <app_cache_dir>/untitled/<tab.id>.typ を Rust 側で空ファイルとして
+    // 作成し、ここに保持する。tab.path が確定したら(saveAs 後)
+    // cleanup_untitled_path で削除し null に戻す。
+    virtualPath: string | null;
   };
 
   let nextTabSeq = 1;
@@ -169,11 +181,51 @@
       cursorAnchor: 0,
       cursorHead: 0,
       scrollTop: 0,
+      editorState: null,
+      virtualPath: null,
     };
+  }
+
+  // 無題タブで preview / LSP を起動する直前に呼び、必要なら仮想ファイルを
+  // 作成して virtualPath を入れる。返り値は preview / LSP に渡す path
+  // (実 path 優先、なければ仮想 path、Typst として扱えなければ null)。
+  async function ensurePreviewablePath(tab: Tab): Promise<string | null> {
+    if (tab.path) return isTypstPath(tab.path) ? tab.path : null;
+    if (!tab.virtualPath) {
+      try {
+        tab.virtualPath = await invoke<string>("prepare_untitled_path", {
+          tabId: tab.id,
+        });
+      } catch (e) {
+        console.warn("[preview] prepare_untitled_path failed:", e);
+        return null;
+      }
+    }
+    return tab.virtualPath;
+  }
+
+  async function disposeVirtualPathFor(tab: Tab) {
+    if (!tab.virtualPath) return;
+    const dead = tab.virtualPath;
+    tab.virtualPath = null;
+    try {
+      await invoke("cleanup_untitled_path", { path: dead });
+    } catch (e) {
+      console.warn("[preview] cleanup_untitled_path failed:", e);
+    }
   }
 
   function isTypstPath(p: string | null | undefined): boolean {
     return !!p && p.toLowerCase().endsWith(".typ");
+  }
+
+  // タブが Typst 機能(preview / LSP / PDF / 構文ハイライト)の対象か判定。
+  // 無題タブ(path=null)は新規 Typst ドキュメント前提で常に対象。
+  // 既存ファイルを開いたタブは拡張子 .typ のみ対象、それ以外(.md / .csv 等)は対象外。
+  function isTypstTab(tab: Tab | null | undefined): boolean {
+    if (!tab) return false;
+    if (tab.path === null) return true;
+    return isTypstPath(tab.path);
   }
 
   // ファイル選択ダイアログのフィルタ。locale 変更後にも追従させたいので、
@@ -191,9 +243,10 @@
   ];
   const filtersImage = () => [{ name: t("filter.image"), extensions: IMAGE_EXTS }];
   const PREVIEW_URL = "http://127.0.0.1:23625/";
-  // tinymist preview の HTTP サーバが立ち上がるまでの待機時間(暫定)。
-  // 後で HTTP プローブに置き換える前提。
-  const PREVIEW_BOOT_DELAY_MS = 1500;
+  // 編集中バッファの preview 反映 debounce(ms)。短すぎると preview が
+  // 過剰に再コンパイル、長すぎると体感遅延。Typst の incremental compile
+  // は速いので 150ms は無難な落としどころ。
+  const PREVIEW_MEMORY_DEBOUNCE_MS = 150;
 
   // タブ配列とアクティブ ID。最初は空タブ 1 枚で起動。
   const initialTab = makeEmptyTab();
@@ -296,6 +349,12 @@
   let path = $derived<string | null>(getActiveTab()?.path ?? null);
   let content = $derived(getActiveTab()?.content ?? "");
   let dirty = $derived(getActiveTab()?.dirty ?? false);
+  // タブ切替時に Editor.svelte が view.setState で復元するための state。
+  // ファイル open / 起動直後のタブは null、切替前のタブには captureActiveTabState
+  // で設定済み。Editor 側で 1 度適用したら親が同じ参照を渡している間は再適用しない。
+  let activeEditorState = $derived<EditorState | null>(
+    getActiveTab()?.editorState ?? null,
+  );
 
   let status = $state("");
   let statusKind = $state<"info" | "error">("error");
@@ -346,14 +405,20 @@
     previewError = "";
     previewSrc = null;
     try {
+      // Rust 側で起動完了プローブ + control plane WebSocket 接続まで待つ。
+      // ここから抜けた時点で preview_update_memory が呼べる状態。
       await invoke("start_preview", { path: forPath });
     } catch (e) {
       previewStatus = "error";
       previewError = String(e);
       return;
     }
-    // 起動完了を待つ。本来は HTTP プローブで判定するべきだが、暫定で固定 wait。
-    await new Promise((resolve) => setTimeout(resolve, PREVIEW_BOOT_DELAY_MS));
+    // 起動直後は memory sync を送らない。初回 doc は tinymist が
+    // ディスクから読み込んだ内容で broadcast されており、エディタの内容
+    // とも一致している(ファイル open 直後)。早期に updateMemoryFiles
+    // を送ると tinymist 内部の初回 doc 状態と競合し、iframe からの
+    // `current` リクエストに対して SVG が返らなくなる挙動を観測した。
+    // ユーザが編集したら onChange の debounce で memory に流れ始める。
     previewSrc = `${PREVIEW_URL}?t=${Date.now()}`;
     previewStatus = "ready";
   }
@@ -367,6 +432,42 @@
     }
     previewStatus = "idle";
     previewSrc = null;
+    // 切替直後の遅延更新で旧パスを送るのを防ぐ
+    if (previewMemoryTimer !== null) {
+      clearTimeout(previewMemoryTimer);
+      previewMemoryTimer = null;
+    }
+  }
+
+  // 編集中の未保存バッファを preview に注入する debounce タイマー。
+  // タイマー発火時点での active タブ内容を control plane WS 越しに
+  // tinymist preview の memory file として注入する(updateMemoryFiles)。
+  // tinymist は watch ベースのディスク変更にも反応するが、それはファイルを
+  // 保存した時のみ。未保存の編集をリアルタイム反映するには memory 注入が要る。
+  let previewMemoryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function schedulePreviewMemoryUpdate() {
+    if (previewMemoryTimer !== null) {
+      clearTimeout(previewMemoryTimer);
+    }
+    previewMemoryTimer = setTimeout(async () => {
+      previewMemoryTimer = null;
+      const tab = getActiveTab();
+      if (!tab || !isTypstTab(tab)) return;
+      if (previewStatus !== "ready") return;
+      // 無題タブは virtualPath、実ファイルタブは tab.path を使う。
+      const target = tab.path ?? tab.virtualPath;
+      if (!target) return;
+      try {
+        await invoke("preview_update_memory", {
+          path: target,
+          content: tab.content,
+        });
+      } catch (e) {
+        // preview が落ちた直後など、送信失敗は黙殺(次回再起動で復活する)
+        console.warn("[preview] update_memory failed:", e);
+      }
+    }, PREVIEW_MEMORY_DEBOUNCE_MS);
   }
 
   async function openFile() {
@@ -395,6 +496,9 @@
       const isNewPath = tab.path !== selected;
       tab.path = selected;
       tab.dirty = false;
+      // 無題タブから初めて保存した場合、仮想ファイルを掃除して preview を
+      // 新しい実 path に乗せ替える。
+      await disposeVirtualPathFor(tab);
       clearStatus();
       if (isNewPath) {
         if (isTypstPath(selected)) {
@@ -492,6 +596,8 @@
     if (tab.content === next) return;
     tab.content = next;
     tab.dirty = true;
+    // ディスクに書かずに preview だけ最新にする(debounce 経由)
+    schedulePreviewMemoryUpdate();
   }
 
   function onEditorReady(view: EditorView) {
@@ -514,8 +620,10 @@
     view.scrollDOM.scrollTop = tab.scrollTop;
   }
 
-  // タブ切替前に現在 active の状態(カーソル / スクロール)を控える。
+  // タブ切替前に現在 active の状態(カーソル / スクロール / state 全体)を控える。
   // tab.content は updateListener 経由で常に最新化されているので保存不要。
+  // editorState には undo/redo スタックも含まれるので、復元時にタブごとの
+  // 履歴が独立する。
   function captureActiveTabState() {
     const tab = getActiveTab();
     if (!tab || !editorView) return;
@@ -523,6 +631,7 @@
     tab.cursorAnchor = sel.anchor;
     tab.cursorHead = sel.head;
     tab.scrollTop = editorView.scrollDOM.scrollTop;
+    tab.editorState = editorView.state;
   }
 
 
@@ -533,9 +642,14 @@
     const tab = getActiveTab();
     if (!tab) return;
     // doc / カーソル / scroll は Editor.svelte 側の $effect が反映する。
-    // typ なら preview / LSP、それ以外は停止しエディタだけ使う。
-    if (isTypstPath(tab.path) && tab.path) {
-      await Promise.all([startPreview(tab.path), ensureLspFor(tab.path)]);
+    // Typst タブなら preview / LSP、それ以外は停止しエディタだけ使う。
+    if (isTypstTab(tab)) {
+      const target = await ensurePreviewablePath(tab);
+      if (target) {
+        await Promise.all([startPreview(target), ensureLspFor(target)]);
+      } else {
+        await Promise.all([stopPreview(), stopLspSession()]);
+      }
     } else {
       await Promise.all([stopPreview(), stopLspSession()]);
     }
@@ -559,12 +673,17 @@
         current && current.path === null && !current.dirty &&
         current.content === "";
       if (reuseEmpty && current) {
+        // ファイル open で実 path に切替。無題タブだった時の仮想ファイルが
+        // あれば破棄して preview を新 path に乗せ替える前準備。
+        await disposeVirtualPathFor(current);
         current.path = doc.path;
         current.content = doc.content;
         current.dirty = false;
         current.cursorAnchor = 0;
         current.cursorHead = 0;
         current.scrollTop = 0;
+        // ファイル内容差替なので前タブの history は捨てる
+        current.editorState = null;
       } else {
         const tab: Tab = {
           id: newTabId(),
@@ -574,17 +693,21 @@
           cursorAnchor: 0,
           cursorHead: 0,
           scrollTop: 0,
+          editorState: null,
+          virtualPath: null,
         };
         tabs = [...tabs, tab];
         activeTabId = tab.id;
       }
       clearStatus();
       const newActive = getActiveTab();
-      if (newActive && isTypstPath(newActive.path) && newActive.path) {
-        await Promise.all([
-          startPreview(newActive.path),
-          ensureLspFor(newActive.path),
-        ]);
+      if (isTypstTab(newActive)) {
+        const target = newActive ? await ensurePreviewablePath(newActive) : null;
+        if (target) {
+          await Promise.all([startPreview(target), ensureLspFor(target)]);
+        } else {
+          await Promise.all([stopPreview(), stopLspSession()]);
+        }
       } else {
         await Promise.all([stopPreview(), stopLspSession()]);
       }
@@ -593,14 +716,20 @@
     }
   }
 
-  function addEmptyTab() {
+  async function addEmptyTab() {
     captureActiveTabState();
     const tab = makeEmptyTab();
     tabs = [...tabs, tab];
     activeTabId = tab.id;
     // doc / カーソル / scroll は Editor.svelte 側の $effect が反映する。
-    // 空タブは Typst でないので preview / LSP は止める
-    void Promise.all([stopPreview(), stopLspSession()]);
+    // 無題タブも Typst として扱うので、仮想ファイルを準備して preview / LSP
+    // を起動する(空ドキュメントの preview が表示される)。
+    const target = await ensurePreviewablePath(tab);
+    if (target) {
+      await Promise.all([startPreview(target), ensureLspFor(target)]);
+    } else {
+      await Promise.all([stopPreview(), stopLspSession()]);
+    }
   }
 
   async function closeTab(targetId: TabId) {
@@ -633,13 +762,22 @@
     const idx = tabs.findIndex((t) => t.id === targetId);
     if (idx < 0) return;
     const wasActive = activeTabId === targetId;
+    // 閉じるタブが無題タブ(virtualPath を抱えている)場合は先に掃除。
+    const closingTab = tabs[idx];
+    if (closingTab) await disposeVirtualPathFor(closingTab);
     tabs = tabs.filter((t) => t.id !== targetId);
     if (tabs.length === 0) {
-      // 全部閉じたら空タブを 1 枚自動で生成(ようこそ画面相当)
+      // 全部閉じたら空タブを 1 枚自動で生成(ようこそ画面相当)。
+      // 無題タブは Typst 機能の対象なので仮想ファイル準備 + preview/LSP 起動。
       const fresh = makeEmptyTab();
       tabs = [fresh];
       activeTabId = fresh.id;
-      await Promise.all([stopPreview(), stopLspSession()]);
+      const target = await ensurePreviewablePath(fresh);
+      if (target) {
+        await Promise.all([startPreview(target), ensureLspFor(target)]);
+      } else {
+        await Promise.all([stopPreview(), stopLspSession()]);
+      }
       return;
     }
     if (wasActive) {
@@ -695,7 +833,7 @@
   // テンプレを選んだ時:active タブが空タブ(path 無し・未編集)なら content だけ
   // 差し替え、そうでなければ新規タブを作って差し替える。Typst でない初期状態の
   // タブは preview/LSP が止まっているので、必要なら起動。
-  function onTemplateSelect(id: string) {
+  async function onTemplateSelect(id: string) {
     const tpl = resolveTemplate(id, resolvedLocale, paperSize);
     if (!tpl) {
       setStatus(t("status.templateMissing", { id }), "error");
@@ -713,6 +851,8 @@
       current.cursorAnchor = 0;
       current.cursorHead = 0;
       current.scrollTop = 0;
+      current.editorState = null;
+      // virtualPath は流用可(無題のままなので preview 経路は同じ)
     } else {
       const tab: Tab = {
         id: newTabId(),
@@ -722,6 +862,8 @@
         cursorAnchor: 0,
         cursorHead: 0,
         scrollTop: 0,
+        editorState: null,
+        virtualPath: null,
       };
       tabs = [...tabs, tab];
       activeTabId = tab.id;
@@ -729,6 +871,14 @@
     templateDialogOpen = false;
     markFirstRunDone();
     clearStatus();
+    // 無題タブで preview を起動(または既存 preview に乗せ替え)。
+    const newActive = getActiveTab();
+    if (newActive && isTypstTab(newActive)) {
+      const target = await ensurePreviewablePath(newActive);
+      if (target) {
+        await Promise.all([startPreview(target), ensureLspFor(target)]);
+      }
+    }
   }
 
   function togglePreview() {
@@ -1115,9 +1265,19 @@
         if (currentFolder) {
           await loadProjectTree(currentFolder);
         }
-        // 初回起動時のみテンプレ選択ダイアログを自動表示
+        // 初回起動時のみテンプレ選択ダイアログを自動表示。それ以外は
+        // 起動直後の無題タブで preview / LSP を立ち上げる(空ドキュメント
+        // でも preview ペインに何かが映っている方が体験として良い)。
         if (!firstRunDone) {
           templateDialogOpen = true;
+        } else {
+          const active = getActiveTab();
+          if (active && isTypstTab(active)) {
+            const target = await ensurePreviewablePath(active);
+            if (target) {
+              void Promise.all([startPreview(target), ensureLspFor(target)]);
+            }
+          }
         }
       } catch (e) {
         console.warn("settings load failed, using defaults:", e);
@@ -1305,8 +1465,9 @@
         {#if Editor}
           <Editor
             value={content}
+            externalState={activeEditorState}
             mode={editorMode}
-            languageMode={isTypstPath(path) ? "typst" : "plain"}
+            languageMode={isTypstTab(getActiveTab()) ? "typst" : "plain"}
             {lspClient}
             filePath={path}
             onChange={onEditorChange}

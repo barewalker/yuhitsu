@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-01
+最終更新: 2026-05-02(リアルタイム preview 反映 / per-tab undo history / 無題タブ preview 対応 + codemirror-lang-typst の編集中 panic で構文ハイライトを暫定無効化)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -85,6 +85,7 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] CodeMirror 6 を Svelte に組み込み(`@codemirror/state`, `@codemirror/view`, `@codemirror/commands`)— commit `977c59b`
 - [x] dirty 状態で終了確認 → 「はい」で閉じない問題を修正(`core:window:allow-destroy` 追加)— commit `38b3017`
 - [x] Typst 用 syntax highlighting(`codemirror-lang-typst` v0.4.0、Apache-2.0、Typst 公式 typst-syntax を WASM 化)— commit `2d576d6`
+  - **2026-05-02 で暫定無効化**:上流 issue #5(単一 transaction 内に複数 changes で WASM panic)が `#figure` 末尾編集で発火するため、`langExtension` を `return []` で固定。Phase 2 で StreamLanguage ベースに置き換え予定
   - [x] `vite-plugin-wasm` + `vite-plugin-top-level-await` 導入(WASM ESM 対応)
   - [x] SvelteKit hydration の TDZ 回避のため Editor.svelte を動的 import
   - [x] One Dark 風の自前 HighlightStyle を `Prec.highest` で同梱版に優先させる
@@ -96,10 +97,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] **iframe 方式で MVP 実装**(http://127.0.0.1:23625/ をそのまま表示、tinymist 公式フロントエンド HTML を流用)
 - [x] WindowEvent::Destroyed で subprocess を kill(プロセスリーク防止)
 - [x] ファイル切替時の preview 再起動・既存パス保存時の自動再コンパイル動作確認
-- [ ] HTTP プローブによる起動完了判定(現状は 1.5 秒固定 wait)
-- [ ] 自前 WebSocket クライアントへの置き換え(エディタ ↔ preview 双方向同期、クリックジャンプ等)
-- [ ] エディタ ←→ preview の同期スクロール
-- [ ] 編集中(未保存)もリアルタイムにプレビュー反映(現状は保存時に tinymist が watch 検知)
+- [x] **TCP プローブによる起動完了判定**(2026-05-02、1.5 秒固定 wait を撤去。data plane / control plane の両 TCP listen を 50ms ポーリングで確認、上限 5 秒)
+- [x] **自前 WebSocket クライアント(Rust 中継方式)**(2026-05-02、`tokio-tungstenite` で control plane に Rust 側から接続。Tauri webview の `tauri://` origin が tinymist の origin チェックで弾かれる問題を回避)
+- [ ] エディタ ←→ preview の同期スクロール(control plane の `changeCursorPosition` / `panelScrollByPosition` / `editorScrollTo` を使えば実装可、別タスク)
+- [x] **編集中(未保存)もリアルタイムにプレビュー反映**(2026-05-02、control plane WS の `updateMemoryFiles` メッセージで実装。onChange を 150ms debounce、Typst タブの時のみ送信)
+- [x] **無題タブで preview を有効化**(2026-05-02、`app_cache_dir/untitled/<tab.id>.typ` を仮想ファイルとして作成、`Tab.virtualPath` で管理。新規ドキュメントを書きながら preview を確認できる)
+- [x] **タブ単位の undo history 分離**(2026-05-02、`Tab.editorState` に CodeMirror state を per-tab で保持、`view.setState` で復元)
 
 #### (4) PDF エクスポート
 - [x] **MVP: tinymist compile 経由で PDF 出力**(Tauri command + ツールバー + Ctrl+E)— commit `af1cf8f`
@@ -247,10 +250,19 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 
 注: 「フォーム型テンプレート」「GUI 挿入ボタン」は Sprint 3 で前倒し着手済みの場合、ここでは拡張・成熟化のみを担う。
 
+- [ ] **Typst 構文ハイライタの再導入**(Sprint 3 で暫定無効化、Phase 2 で復帰)
+  - 現状:`codemirror-lang-typst` v0.4.0 の WASM 起因 panic(上流 issue #5)で plain mode 運用
+  - 候補 A:`@codemirror/legacy-modes` の StreamLanguage で regex ベース簡易ハイライタ自作
+  - 候補 B:上流修正完了次第バージョン上げて復帰(タイムラインは未読み)
+  - 候補 C:fork して上流バグを直す(WASM 側 Rust 修正、最重)
 - [ ] フォーム型テンプレート入力の成熟化(差別化ポイント #2、Sprint 3 簡素版を強化)
 - [ ] GUI 挿入ボタンの成熟化(差別化ポイント #4、数式は MathLive (MIT) 等の手書き UI 検討)
-- [ ] パッケージ管理 UI(Typst Universe 連携、ワンクリックでテンプレート取り込み)
-- [ ] テンプレートギャラリー
+- [ ] **Typst Universe 連携 UI**(2026-05-02 氏承認、Phase 2 で扱う)
+  - [ ] テンプレート取り込み:起動時テンプレ選択ダイアログに「Universe から取得」タブを追加 → `tinymist init @preview/<name>` 相当を実行 → 出力先フォルダを Yuhitsu で開く
+  - [ ] パッケージ閲覧:`@preview/<name>` の検索 / バージョン選択 / 現在の文書末尾に `#import` 行を挿入
+  - [ ] キャッシュ可視化:`~/.cache/typst/packages/preview/` の中身一覧、サイズ表示、削除
+  - 補足:パッケージ参照(`#import "@preview/..."`)自体は Phase 1 時点で tinymist が自動取得するため既に動作する。Phase 2 で扱うのは「**取り込み・閲覧・管理の GUI**」のみ
+- [ ] テンプレートギャラリー(同梱テンプレ + Universe テンプレを横断検索する UI)
 - [ ] **内蔵 AI 機能の最小実装**(段落整え・補完・テンプレート穴埋め支援)
   - [ ] LLM プロバイダ抽象(Anthropic / OpenAI / ローカル LLM / VPN 内エンドポイント を等しく扱う)
   - [ ] API キーの安全な保存(`tauri-plugin-stronghold` または OS キーチェーン)
@@ -460,3 +472,63 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - Obsidian / Typora は CodeMirror 6 の Decoration API でエディタ側に被せる方式
   - tinymist preview の SVG 出力は contentEditable 化できない(SVG → Typst の逆変換不能)
   - Typst は Markdown より文法が複雑で、装飾で隠せるノード(見出し / 強調 / リスト / リンク)、プレースホルダ代用ノード(数式 / 表)、生コードのまま見せるノード(`#let` / `#import` / 関数定義)の 3 カテゴリに分かれる → Phase 3 の「設計書作成」が一番重い作業
+
+### 2026-05-02: 起動時の preview 接続失敗(孤児 tinymist 起因)を修正
+- **症状**(氏報告):起動時に「Failed to start preview. failed to connect preview control plane after 5000 ms」(初回は Connection reset、2 回目は Connection refused)
+- **真因**:Tauri dev の再ビルド時、Yuhitsu のメインプロセスはシグナルで強制終了されるが、**子プロセス(`tinymist preview` / `tinymist lsp`)が孤児として残る**。残った preview が 127.0.0.1:23625 を保持しているため、新 Yuhitsu の preview spawn 時に **`AddrInUse` で tinymist 内部 panic**(http.rs:37 の `TcpListener::bind(..).unwrap()`)。control plane(23626)も道連れで listen 開始直後に死ぬ → 接続 refused
+- **対策**:
+  - Tauri `setup` フックで `kill_lingering_tinymist()` を呼び、`pkill -f "tinymist preview"` と `pkill -f "tinymist lsp"` で起動前に古いプロセスを掃除(Unix 限定。Windows は別途対応必要)
+  - `connect_control_plane` は accept 準備未完了のレース対策として 80ms 間隔の retry ループ(最大 5 秒)を維持
+  - `probe_data_plane_ready` は data plane の TCP listen 確認のみ(control plane の listen 確認は意味がない、accept ループ起動を見ないと判定にならないため)
+- **将来の改良**:Linux で `prctl(PR_SET_PDEATHSIG)` を使って「親死亡 → 子も死ぬ」を保証すれば pkill 戦略は不要(libc クレート追加が必要)。Phase 2 でやる
+- 誤爆懸念:他用途で `tinymist preview` / `tinymist lsp` を立てているケースは想定外。普通の利用環境では問題にならない
+
+### 2026-05-02: 無題タブで preview を有効化(仮想 .typ パス方式)
+- **背景**:`schedulePreviewMemoryUpdate` 完成 + per-tab undo 完成後に氏が確認 → **無題タブでは preview が出ないことに気付き要望**。「とりあえず書きながら preview を見たい」のは新規ドキュメント編集の典型的体験
+- **判断**:`tinymist preview` が実在ファイルパスを必須とするため、**無題タブ用の仮想 .typ ファイルを `app_cache_dir/untitled/<tab.id>.typ` に作成して内部 path として扱う**
+- 実装:
+  - Rust:`prepare_untitled_path(tab_id) -> String` / `cleanup_untitled_path(path)` コマンド追加。app 起動時の `setup` フックで `cleanup_untitled_dir` を呼んで前回の残骸を掃除(crash 耐性)
+  - フロント:`Tab` 型に `virtualPath: string | null` を追加。`isTypstTab(tab)` ヘルパ(無題タブも Typst 機能対象として扱う、新規ドキュメント前提)。`ensurePreviewablePath(tab)` で「実 path 優先 / なければ仮想 path を必要に応じて遅延作成」。`disposeVirtualPathFor(tab)` で削除
+  - フロント:preview / LSP / memory file 注入の各経路を `isTypstPath` から `isTypstTab` 判定に置き換え、起動 path は `ensurePreviewablePath` 経由で解決
+  - フロント:saveAs 成功時(無題 → 実 path)、closeTab 時、ファイル open で空タブを再利用する時に仮想ファイルを cleanup
+  - フロント:onMount の loadSettings 後で「初回起動時はテンプレダイアログ / それ以外は無題タブで preview を即起動」に分岐(空 doc プレビューが映る方が体験が良い)
+- 残:タブ閉じ忘れ等で残った仮想ファイルは「次回起動時の cleanup_untitled_dir」で掃除されるので長期蓄積はしない設計
+
+### 2026-05-02: タブ単位の undo history 分離(view.setState による per-tab state 保持)
+- **症状**(氏報告):タブ A で編集 → タブ B に切替 → タブ B で編集 → undo すると **別タブの内容に遡及**してしまう。さらに「undo で別タブの内容で上書きされる」現象も発生
+- **原因**:単一の `EditorView` を全タブで共有し、タブ切替時に doc 全置換していたため、CodeMirror の `history()` extension が **全タブの編集を 1 つの history に連結**していた
+- **第一段階対策(失敗)**:`historyCompartment` で history を Compartment 化 → タブ切替時に `historyCompartment.reconfigure(history())` で history インスタンスを作り直し → 別タブへの遡及はなくなったが、**「タブ切替を挟むと undo が遡れない」**(切替前の編集スタックを完全に捨ててしまう)
+- **第二段階対策(採用)**:`Tab` 型に `editorState: EditorState | null` を追加し、タブ切替時に `view.setState(tab.editorState)` で **state まるごと復元**(doc / 選択 / undo redo / scroll を一括)。`captureActiveTabState` で `tab.editorState = view.state` を控える。新規タブ・file open ルートは従来通り doc 全置換 + history reset(新セッション扱い)。Editor.svelte に `externalState` prop を追加し、`lastAppliedExternalState` で同じ参照の再 setState を抑止
+- 残:undo/redo のキーバインドは `historyKeymap`(Ctrl+Z / Ctrl+Shift+Z または Ctrl+Y、macOS は Cmd 系)で標準どおり
+
+### 2026-05-02: codemirror-lang-typst の編集中 panic 発覚 → 構文ハイライトを Phase 1 期間中は無効化
+- **症状**(氏報告):ファイル末尾の `#figure(...)` 内、caption 行以降を削除しようとすると **行が復活し、さらに undo も効かない**。無題タブ・末尾以外の `#figure` では再現しない
+- **切り分け順序**:
+  1. リアルタイム preview 反映(control plane WS の `updateMemoryFiles`)を一時無効化 → 改善なし → 私の今回の作業とは独立
+  2. LSP の `languageServerSupport` を無効化 → 改善なし → tinymist LSP 起因ではない
+  3. Typst 言語拡張(`codemirror-lang-typst` の `typst()`)を無効化 → **症状消失** → これが原因
+- **原因確定**:`codemirror-lang-typst` v0.4.0(GitHub: kxxt/codemirror-lang-typst)の WASM Typst パーサが、**「単一 transaction に複数 changes」のケースで panic** する。タブ切替時の全置換 panic(2026-04-29 の workaround で 3 段階 dispatch にしている件)も同根。上流 issue #5「Fix problems with multiple changes in a single editor transaction」(2025-12-03 更新)が立っているが**未修正**、最新 v0.4.0 でも未解決。npm 上に他バージョン無し
+- **判断**:Phase 1 段階では構文木を必要とする機能(folding / 高度 navigation)を持っていないので、構文ハイライトは犠牲にしてもエディタ安定性を優先する。`Editor.svelte::langExtension` を `return []` で固定し plain mode で運用。`typst` / `Prec` / `HighlightStyle` / `tags as t` / `highlightStyle` 定義は Phase 2 で StreamLanguage 移行する時に参照しやすいよう残置(svelte-check は通過、未使用警告なし)
+- **Phase 2 で対応**:`@codemirror/legacy-modes` の StreamLanguage で regex ベース簡易ハイライタを自作する案が有力。完璧な構文認識は LSP(tinymist)が担っているので二重持ちは不要
+- 残:tinymist LSP の hover / 補完 / 診断 自体は復活させて運用(構文ハイライトだけが消えた状態)
+
+### 2026-05-02: 編集中バッファのリアルタイム preview 反映(control plane WebSocket クライアント)
+- **背景**:Sprint 2 (3) の積み残し「編集中(未保存)もリアルタイムにプレビュー反映」「HTTP プローブによる起動完了判定」「自前 WebSocket クライアントへの置き換え」は本質的にひとつの作業に収束。tinymist preview の **control plane WebSocket(`ws://127.0.0.1:23626/`)** が公式に `syncMemoryFiles` / `updateMemoryFiles` / `removeMemoryFiles` のフックを持つので、これを使えば「ディスクに書かずに preview に反映」が実現する
+- **接続経路の判断**:Tauri の production WebView は `tauri://localhost` という独自スキームから動く。tinymist の origin チェック(`http://localhost` / `127.0.0.1` または `vscode-webview://`)では `tauri://` が弾かれる可能性が高い → **Rust 側に WebSocket クライアントを置き、Tauri command/event で橋渡しする**方式を採用(フロント直接接続だと dev は通っても production で動かなくなる懸念)
+- 実装:
+  - Rust:`tokio-tungstenite` v0.24 + `futures-util` v0.3 を追加。`PreviewState` に `control_tx: AsyncMutex<Option<UnboundedSender<String>>>` を追加。`start_preview` を async 化し、subprocess spawn → TCP プローブ(data / control 両 plane が listen するまで 50ms 間隔でポーリング、上限 5 秒)→ control plane WS 接続 → 送受信タスクを spawn、までを 1 関数で完結
+  - Rust:新コマンド `preview_update_memory(path, content)` / `preview_remove_memory(paths)`。WS 未接続時は no-op で返す(タブが .typ じゃない時の保険)
+  - Rust:受信側は将来の同期スクロール / クリックジャンプ用に Tauri event `preview:control` に流す土台のみ作成
+  - フロント:`onEditorChange` 内で `schedulePreviewMemoryUpdate()` を呼ぶ。150ms debounce、active タブが path 持ち Typst で `previewStatus === "ready"` の時だけ送信。`stopPreview` 時にタイマーキャンセル
+  - フロント:1.5 秒固定 wait の `PREVIEW_BOOT_DELAY_MS` を撤去(Rust 側プローブで代替)
+  - 副次:`save / saveAs` を `Promise<boolean>` 化(2026-05-01)した時の取りこぼしで `CommandContext` の型が `Promise<void>` のままだった件を修正(`Promise<unknown>` に緩和)
+- 残:無題タブ(path 無し)はまだ対象外。仮想パス(例 `__yuhitsu_unsaved_<tabId>__.typ`)を割り当てて memory file 化すれば対応可だが、preview の subprocess 起動引数に実在ファイルが要る制約があり別タスク
+- 動作確認:**氏に GUI で確認してもらう必要あり**。型チェック(`pnpm check`)・Rust ビルド(`cargo check`)は通過
+
+### 2026-05-02: Typst Universe 連携 UI は Phase 2 で扱う
+- **氏質問**:Typst Universe のパッケージやテンプレートは Yuhitsu で使える?
+- **現状確認**:
+  - パッケージ参照(`#import "@preview/cetz:0.3.0"` 等)は **既に動作**。Yuhitsu は素の `tinymist` を spawn しているだけで、tinymist 内部の typst-kit が初回コンパイル時に自動ダウンロード&ローカルキャッシュ(`~/.cache/typst/packages/preview/<name>/<version>/`)する
+  - テンプレ取り込み(`typst init @preview/<name>`)は **UI 未実装**。同梱テンプレ(`app/src/lib/templates/<id>/`)のみ起動ダイアログから選択可能
+- **判断**:Universe テンプレ取り込み UI は **Phase 2 で扱う**(Phase 1 Sprint 3 では同梱テンプレのみ)。Phase 2 の「パッケージ管理 UI」項目を Universe 連携 UI として具体化(取り込み / 閲覧 / キャッシュ可視化の 3 機能)
+- 残:Sprint 3 の残タスクに戻る(フォーム型テンプレ簡素版 / ツールバー D&D 編集 UI / キーバインド設定 UI など)

@@ -91,8 +91,11 @@ export interface CommandContext {
   view: EditorView | null;
   openFile: () => void | Promise<void>;
   openFolder: () => void | Promise<void>;
-  save: () => void | Promise<void>;
-  saveAs: () => void | Promise<void>;
+  // save / saveAs は呼び出し元(+page.svelte)では「保存できたか」を
+  // boolean で返すが、コマンド経由の呼び出しは戻り値を使わないため
+  // Promise<unknown> で受ける。
+  save: () => void | Promise<unknown>;
+  saveAs: () => void | Promise<unknown>;
   exportPdf: () => void | Promise<void>;
   pickAndInsertImage: () => void | Promise<void>;
   pickAndInsertBibliography: () => void | Promise<void>;
@@ -116,7 +119,8 @@ export interface CommandDef {
   defaultKey?: string;
   /** EditorView を必要とするか。null のとき disabled / キーは無視 */
   needsEditor: boolean;
-  run: (ctx: CommandContext) => void | Promise<void>;
+  // 戻り値は使わないので unknown を許容(save / saveAs が boolean を返す等)
+  run: (ctx: CommandContext) => void | Promise<unknown>;
 }
 
 // EditorView が必須のコマンド向けヘルパー。run 内での null チェックを
