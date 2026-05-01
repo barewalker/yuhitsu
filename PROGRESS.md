@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
 最終更新: 2026-05-01
-現在のフェーズ: **Phase 1 — Sprint 3 進行中(設定ファイルを Yuhitsu で開ける、UI 文字列の i18n 化が次)**
+現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
 
@@ -219,7 +219,13 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] フロントの `open-settings` コマンド(Ctrl+, / Settings アイコン、ツールバー右端)
   - [x] save() 内で settings.json への保存を検知したら自動 reloadSettings(focus 任せより確実)
   - [x] loadSettings の冒頭で `store.reload()`(Yuhitsu の `fs::write` は Tauri Store のキャッシュを無効化しないため必須)
-- [ ] **UI 文字列の i18n 化**(2026-05-01 氏指摘で追加。テンプレカードは `meta.json` で多言語化済みだが、hover ヒント / 確認ダイアログ / ステータス / プレースホルダは日本語ハードコードのまま。自前 `i18n.ts` で対応予定)
+- [x] **UI 文字列の i18n 化**(2026-05-01 氏指摘で追加 → 即日実装)
+  - [x] 自前 `$lib/i18n/index.svelte.ts`($state ベースの `i18nState.locale` + `setLocale` + `t(key, params?)`、ライブラリ追加なし)
+  - [x] 辞書 `ja.json` / `en.json`(command label / dialog / placeholder / splitter / project / preset / filter / status / preview / templateDialog / tab.untitled / app.name)
+  - [x] `CommandDef.label` / `ToolbarPreset.label` を `labelKey` 化
+  - [x] `+page.svelte` の全 UI 文字列(確認ダイアログ / ステータス / プレースホルダ / aria-label / タブ (無題) / プロジェクトビュー / iframe title / ファイル選択フィルタ)を `t()` 経由に統一
+  - [x] `TemplateDialog.svelte` の `aria-label` も `t()` 化
+  - [x] `onMount` + `reloadSettings` で `setLocale(resolveLocale(localeMode))` を呼び、`settings.json` の locale 変更が UI 全体にリアクティブ反映
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
 - [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
@@ -386,6 +392,18 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - `settings.ts` に `AppearanceSettings` 領域を新設、`saveTheme` を export、Tauri Store で永続化
   - ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト(操作モードの隣)。"自動" は `prefers-color-scheme` に追従、`matchMedia` で OS 側変更も即反映
 - 副次効果:Phase 2 で正式テーマ UI を作る時はプリセット(solarized / nord / gruvbox 等)を `[data-theme="..."]` セットとして増やすだけで対応できる構造に
+
+### 2026-05-01: UI 文字列の i18n 化(自前 i18n.ts + ja/en 辞書)
+- **氏指摘で発覚**:locale を ja に切り替えても UI 全体が日本語のまま → UI 文字列がハードコードされたままで i18n 機構が無いことが判明
+- **方針(再確認)**:UI 文字最小化方針(hover / 確認 / ステータス / プレースホルダのみ)に従い、辞書ルックアップ + `{key}` 差し込みで足りる範囲に絞る → 自前 `i18n.ts` で十分、ライブラリ追加なし
+- 実装:
+  - `$lib/i18n/index.svelte.ts`:$state(locale) + setLocale + t(key, params?)、`.svelte.ts` 拡張子で `$state` を共有モジュールから export
+  - 辞書 `ja.json` / `en.json`:約 70 キー
+  - `CommandDef.label` → `labelKey`、表示時に `t(def.labelKey)` を呼ぶ。`ToolbarPreset.label` も同様
+  - 確認ダイアログ(`ask`)・`setStatus`・プレースホルダ HTML・splitter aria-label・タブ「(無題)」・iframe title・ファイル選択フィルタなどを全部 `t()` 化
+  - `setLocale(resolveLocale(localeMode))` を `onMount` + `reloadSettings` で呼び、settings.json での locale 変更が UI 全体にリアクティブ反映
+- 確認:タブ「(無題) ↔ (Untitled)」/ テンプレダイアログのカード / プレビュープレースホルダの切替を確認済み
+- 残:**テンプレ本体の用語**(例:「業務報告書」テンプレ内の `[ここに実施内容を箇条書きで記載]`)はテンプレファイル自体の i18n(`ja.typ` / `en.typ`)で対応済み
 
 ### 2026-05-01: 設定ファイルを Yuhitsu で開く + UI 文字列 i18n の認識合わせ
 - **氏要望**:設定確認のたびに別エディタで開いて再起動するのが面倒。Yuhitsu 自身で開けるように
