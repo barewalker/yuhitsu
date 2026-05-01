@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
 最終更新: 2026-05-01
-現在のフェーズ: **Phase 1 — Sprint 3 進行中(GUI 挿入・プロジェクトビュー・タブ機能・テーマ機能まで実装済み、テンプレート系が次)**
+現在のフェーズ: **Phase 1 — Sprint 3 進行中(ツールバーをアクション専用化、ステータスバー仕込み完了、テンプレート系が次)**
 
 ---
 
@@ -191,9 +191,19 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] **テーマ機能(自動 / ライト / ダーク)**(Sprint 3 中に氏の要望で追加、Phase 2 予定の前倒し)
   - [x] 全 UI 色を CSS 変数化(`app.html` の `:root` に 27 種、背景・ボーダー・文字・アクセント・ステータス・Syntax)
   - [x] `:root[data-theme="light"]` にライトテーマ(One Light 風)を定義、`color-scheme` も追従
-  - [x] ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト追加、`settings.appearance.theme` で永続化
+  - [x] `settings.appearance.theme` で永続化(`"auto" | "light" | "dark"`、デフォルト `"auto"`)
   - [x] "自動" は `prefers-color-scheme` に追従、OS 側変更も `matchMedia` で即反映
   - [x] CodeMirror の `EditorView.theme` / `HighlightStyle` も `var(...)` 化してテーマ切替に連動
+- [x] **UI 文字最小化方針 + 設定ファイル直編集ルート**(Sprint 3 中に氏の方針確立)
+  - [x] ツールバーから操作モード / テーマ セレクトを撤去(「UI に文字を使わない」が Yuhitsu 美学。設定 UI は Phase 2)
+  - [x] ツールバーから filename / status 表示も撤去(タブと重複していた)
+  - [x] 設定変更は `settings.json` 直編集 + ウィンドウへのフォーカス復帰時に自動再読み込み
+        (再起動不要、`window.focus` イベントで `loadSettings` を再実行して各 state を更新)
+- [x] **ステータスバー(画面下部、設定で on/off)を仕込み**
+  - [x] `workspace.statusbarVisible`(デフォルト `false`)+ migration、`settings.json` 編集 + focus で切替
+  - [x] HTML 構造を配置:左にメッセージ、右に行数 / 文字数 / ワードカウント用の空スロット(`<span class="counter">` × 3)
+  - [x] 行数 / 文字数 / ワードカウントは **Phase 2 で実装する仕込みのみ**(コメントで明示)。
+        ワードカウントは Typst コンパイル後の本文字数(仕上り時)を想定
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
 - [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
@@ -359,3 +369,20 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - `settings.ts` に `AppearanceSettings` 領域を新設、`saveTheme` を export、Tauri Store で永続化
   - ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト(操作モードの隣)。"自動" は `prefers-color-scheme` に追従、`matchMedia` で OS 側変更も即反映
 - 副次効果:Phase 2 で正式テーマ UI を作る時はプリセット(solarized / nord / gruvbox 等)を `[data-theme="..."]` セットとして増やすだけで対応できる構造に
+
+### 2026-05-01: UI 文字最小化方針 + ステータスバー仕込み + WYSIWYG-lite の方向性確認
+- **氏方針(Yuhitsu 美学として確立)**:UI に文字を使うべきじゃない、hover ヒント程度にしたい。設定系(操作モード・テーマ)は編集中に頻繁に変えるものではないのでツールバーから外す
+- 実装:
+  - ツールバーから操作モード / テーマ セレクトと filename / status 表示を撤去 → ツールバーは編集アクション専用に
+  - 設定変更ルートは「`settings.json` 直編集 → Yuhitsu にフォーカス復帰で自動再読み込み」(`window.focus` イベントで `loadSettings` 再実行、再起動不要)
+  - 設定 UI 画面は **Phase 2 で本格実装**(それまでは直編集が一次手段)
+- **i18n 範囲が縮んだ**:残るのは hover ヒント / ステータス / ダイアログ / テンプレカード / プレースホルダ のみ → 自前 `i18n.ts` で十分、ライブラリ追加なし
+- **ステータスバー(画面下部、設定で on/off、デフォルト off)を仕込み**:
+  - 「設定 UI に出すほどでもないが、行数 / 文字数 / ワードカウントは見たくなる」という氏の予感に対応
+  - 表示は HTML 構造とスタイルだけ用意、行数 / 文字数 / ワードカウントは **Phase 2 で実装する空スロット**
+  - ワードカウントは Typst コンパイル後の本文字数(仕上り時)を出す前提
+- **WYSIWYG-lite モードの方向性確認**(氏の質問:Obsidian 的 UI をプレビュー側に実装できるか?):
+  - 結論:**プレビュー側(SVG 出力)では実装不可、エディタ側に AST ベース Decoration で実装する**(これが Phase 3 の本丸)
+  - Obsidian / Typora は CodeMirror 6 の Decoration API でエディタ側に被せる方式
+  - tinymist preview の SVG 出力は contentEditable 化できない(SVG → Typst の逆変換不能)
+  - Typst は Markdown より文法が複雑で、装飾で隠せるノード(見出し / 強調 / リスト / リンク)、プレースホルダ代用ノード(数式 / 表)、生コードのまま見せるノード(`#let` / `#import` / 関数定義)の 3 カテゴリに分かれる → Phase 3 の「設計書作成」が一番重い作業
