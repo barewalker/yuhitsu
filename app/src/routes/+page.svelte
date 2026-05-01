@@ -17,8 +17,6 @@
     type KeybindingsSettings,
     type ThemeMode,
     loadSettings,
-    saveEditorMode,
-    saveTheme,
     saveWorkspace,
   } from "$lib/settings";
   import type { LSPClient } from "@codemirror/lsp-client";
@@ -71,6 +69,7 @@
   let editorPaneRatio = $state(0.5);
   let projectViewVisible = $state(false);
   let projectPaneRatio = $state(0.18);
+  let statusbarVisible = $state(false);
   let workspaceEl = $state<HTMLDivElement | null>(null);
   let editPreviewEl = $state<HTMLDivElement | null>(null);
   let splitterTarget = $state<"project" | "editor" | null>(null);
@@ -80,28 +79,6 @@
   let currentFolder = $state<string | null>(null);
   let projectTree = $state<DirEntry | null>(null);
   let projectExpanded = $state<Record<string, boolean>>({});
-
-  const EDITOR_MODE_LABELS: Record<EditorMode, string> = {
-    default: "標準",
-    vim: "vim",
-    emacs: "emacs",
-  };
-
-  const THEME_LABELS: Record<ThemeMode, string> = {
-    auto: "自動",
-    light: "ライト",
-    dark: "ダーク",
-  };
-
-  async function changeEditorMode(next: EditorMode) {
-    editorMode = next;
-    try {
-      await saveEditorMode(next);
-    } catch (e) {
-      // 永続化失敗は致命的でないので info で控えめに通知
-      setStatus(`設定保存に失敗: ${String(e)}`, "error");
-    }
-  }
 
   // テーマを documentElement に反映する。"auto" は prefers-color-scheme を見て
   // 解決後の dark/light を適用。"auto" 中に OS 側が変わったら matchMedia で追従。
@@ -123,13 +100,20 @@
     }
   }
 
-  async function changeTheme(next: ThemeMode) {
-    themeMode = next;
-    applyTheme(next);
+  // 設定ファイル(settings.json)を外部エディタで書き換えた後、
+  // Yuhitsu にフォーカスが戻った時点で再読み込みして反映する。
+  // 設定 UI 画面ができるまでの暫定手段(Phase 2 で正式 UI を予定)。
+  async function reloadSettings() {
     try {
-      await saveTheme(next);
+      const settings = await loadSettings();
+      editorMode = settings.editor.mode;
+      themeMode = settings.appearance.theme;
+      applyTheme(themeMode);
+      toolbarItems = settings.toolbar.items;
+      keybindings = settings.keybindings;
+      statusbarVisible = settings.workspace.statusbarVisible;
     } catch (e) {
-      setStatus(`設定保存に失敗: ${String(e)}`, "error");
+      console.warn("settings reload failed:", e);
     }
   }
 
@@ -654,6 +638,7 @@
       projectViewVisible,
       projectPaneRatio,
       currentFolder,
+      statusbarVisible,
     }).catch((e) => {
       // 永続化失敗はログのみ(ボタン操作はそのまま受け付ける)
       console.warn("workspace save failed:", e);
@@ -938,6 +923,7 @@
     let unlisten: (() => void) | undefined;
     let unlistenDrop: (() => void) | undefined;
     let unlistenSystemTheme: (() => void) | undefined;
+    let unlistenFocus: (() => void) | undefined;
     (async () => {
       const win = getCurrentWindow();
       unlisten = await win.onCloseRequested(async (event) => {
@@ -973,6 +959,7 @@
         projectViewVisible = settings.workspace.projectViewVisible;
         projectPaneRatio = settings.workspace.projectPaneRatio;
         currentFolder = settings.workspace.currentFolder;
+        statusbarVisible = settings.workspace.statusbarVisible;
         // 前回開いていたフォルダを復元(失敗しても致命的でない)
         if (currentFolder) {
           await loadProjectTree(currentFolder);
@@ -988,6 +975,14 @@
       mql.addEventListener("change", onSystemThemeChange);
       unlistenSystemTheme = () =>
         mql.removeEventListener("change", onSystemThemeChange);
+      // 外部エディタで settings.json を編集 → Yuhitsu にフォーカス復帰した
+      // タイミングで設定を再読み込みする(設定 UI ができるまでの暫定)
+      const onWindowFocus = () => {
+        reloadSettings();
+      };
+      window.addEventListener("focus", onWindowFocus);
+      unlistenFocus = () =>
+        window.removeEventListener("focus", onWindowFocus);
       // ウィンドウへの画像ファイル D&D を受け取り、ドロップされた最初の
       // 画像を現在のカーソル位置に挿入する。Tauri 2 の onDragDropEvent は
       // OS 経由のネイティブ D&D を捕まえる。
@@ -1011,6 +1006,7 @@
       unlisten?.();
       unlistenDrop?.();
       unlistenSystemTheme?.();
+      unlistenFocus?.();
     };
   });
 </script>
@@ -1036,34 +1032,6 @@
         </button>
       {/if}
     {/each}
-    <label class="mode-select">
-      操作モード:
-      <select
-        value={editorMode}
-        onchange={(e) =>
-          changeEditorMode((e.currentTarget as HTMLSelectElement).value as EditorMode)}
-      >
-        {#each Object.entries(EDITOR_MODE_LABELS) as [value, label]}
-          <option {value}>{label}</option>
-        {/each}
-      </select>
-    </label>
-    <label class="mode-select">
-      テーマ:
-      <select
-        value={themeMode}
-        onchange={(e) =>
-          changeTheme((e.currentTarget as HTMLSelectElement).value as ThemeMode)}
-      >
-        {#each Object.entries(THEME_LABELS) as [value, label]}
-          <option {value}>{label}</option>
-        {/each}
-      </select>
-    </label>
-    <span class="filename">{basename(path)}{dirty ? " *" : ""}</span>
-    {#if status}
-      <span class="status status-{statusKind}">{status}</span>
-    {/if}
   </header>
 
   <div class="workspace" bind:this={workspaceEl}>
@@ -1231,6 +1199,30 @@
       </div>
     </div>
   </div>
+
+  {#if statusbarVisible}
+    <!--
+      ステータスバー(画面下部、設定で on/off 切替)。
+      VS Code 風の 1 行レイアウト。左にメッセージ、右に各種カウンタ。
+      行数 / 文字数 / ワードカウント(仕上り時)は Phase 2 以降で実装する仕込み。
+      ワードカウントは Typst をコンパイルした最終本文の字数を出す前提。
+    -->
+    <footer class="statusbar">
+      <span class="statusbar-message">
+        {#if status}
+          <span class="status status-{statusKind}">{status}</span>
+        {/if}
+      </span>
+      <span class="statusbar-counters">
+        <!-- TODO(Phase 2): 行数 (例: Ln 12) -->
+        <span class="counter" data-slot="line"></span>
+        <!-- TODO(Phase 2): 文字数(エディタ上の生入力) -->
+        <span class="counter" data-slot="char"></span>
+        <!-- TODO(Phase 2): ワードカウント(Typst コンパイル後の本文字数) -->
+        <span class="counter" data-slot="word"></span>
+      </span>
+    </footer>
+  {/if}
 </div>
 
 <style>
@@ -1302,38 +1294,44 @@
     stroke-width: 2;
   }
 
-  .mode-select {
-    margin-left: 8px;
+  .statusbar {
+    flex-shrink: 0;
+    height: 22px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12px;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 10px;
+    background: var(--bg-elevated-1);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
     color: var(--text-muted);
+    user-select: none;
   }
 
-  .mode-select select {
-    background: var(--border);
-    color: var(--text-primary);
-    border: 1px solid var(--border-strong);
-    border-radius: 4px;
-    padding: 3px 6px;
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .filename {
-    margin-left: 8px;
-    font-size: 13px;
-    color: var(--text-muted);
-  }
-
-  .status {
-    margin-left: auto;
-    font-size: 12px;
-    max-width: 60%;
+  .statusbar-message {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .statusbar-counters {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .counter {
+    /* Phase 2 以降で実装するスロット。中身が空なら何も占めない */
+  }
+  .counter:empty {
+    display: none;
+  }
+
+  .status {
+    font-size: 11px;
   }
 
   .status-error {

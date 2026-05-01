@@ -43,6 +43,9 @@ export type WorkspaceSettings = {
   projectPaneRatio: number;
   /** 最後に開いていたプロジェクトフォルダ。次回起動時に自動で開き直す */
   currentFolder: string | null;
+  /** ステータスバー(画面下部、行数/文字数/ワードカウント等を表示)を表示するか。
+      標準は off。行数等の実装は Phase 2 以降で追加する仕込みだけ用意してある */
+  statusbarVisible: boolean;
 };
 
 export type Settings = {
@@ -75,6 +78,7 @@ const DEFAULT_SETTINGS: Settings = {
     projectViewVisible: false,
     projectPaneRatio: 0.18,
     currentFolder: null,
+    statusbarVisible: false,
   },
   ai: {},
 };
@@ -177,6 +181,10 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
         : def.projectPaneRatio,
     currentFolder:
       typeof obj.currentFolder === "string" ? obj.currentFolder : null,
+    statusbarVisible:
+      typeof obj.statusbarVisible === "boolean"
+        ? obj.statusbarVisible
+        : def.statusbarVisible,
   };
 }
 
@@ -245,6 +253,7 @@ export async function saveWorkspace(workspace: WorkspaceSettings): Promise<void>
     projectViewVisible: workspace.projectViewVisible,
     projectPaneRatio: clamp(workspace.projectPaneRatio, 0.1, 0.5),
     currentFolder: workspace.currentFolder,
+    statusbarVisible: workspace.statusbarVisible,
   });
   await store.save();
 }
