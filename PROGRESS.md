@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
 最終更新: 2026-05-01
-現在のフェーズ: **Phase 1 — Sprint 3 進行中(起動時テンプレ選択ダイアログ + 多言語テンプレ + 参考文献挿入まで完了、フォーム型テンプレ簡素版が次)**
+現在のフェーズ: **Phase 1 — Sprint 3 進行中(設定ファイルを Yuhitsu で開ける、UI 文字列の i18n 化が次)**
 
 ---
 
@@ -214,9 +214,16 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] HTML 構造を配置:左にメッセージ、右に行数 / 文字数 / ワードカウント用の空スロット(`<span class="counter">` × 3)
   - [x] 行数 / 文字数 / ワードカウントは **Phase 2 で実装する仕込みのみ**(コメントで明示)。
         ワードカウントは Typst コンパイル後の本文字数(仕上り時)を想定
+- [x] **設定ファイル(settings.json)を Yuhitsu 自身のタブで開ける**(2026-05-01 実装、設定 UI ができるまでの一次手段)
+  - [x] Rust `get_settings_path` コマンド(`app_data_dir` を返す、未作成なら空 JSON を作成)
+  - [x] フロントの `open-settings` コマンド(Ctrl+, / Settings アイコン、ツールバー右端)
+  - [x] save() 内で settings.json への保存を検知したら自動 reloadSettings(focus 任せより確実)
+  - [x] loadSettings の冒頭で `store.reload()`(Yuhitsu の `fs::write` は Tauri Store のキャッシュを無効化しないため必須)
+- [ ] **UI 文字列の i18n 化**(2026-05-01 氏指摘で追加。テンプレカードは `meta.json` で多言語化済みだが、hover ヒント / 確認ダイアログ / ステータス / プレースホルダは日本語ハードコードのまま。自前 `i18n.ts` で対応予定)
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
 - [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
+- [ ] 設定読み込みエラーの可視化(JSON パースエラー等が UI に出ない問題、Phase 2 で改善)
 
 ### 配布
 - [ ] winget で配布可能にする
@@ -379,6 +386,15 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - `settings.ts` に `AppearanceSettings` 領域を新設、`saveTheme` を export、Tauri Store で永続化
   - ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト(操作モードの隣)。"自動" は `prefers-color-scheme` に追従、`matchMedia` で OS 側変更も即反映
 - 副次効果:Phase 2 で正式テーマ UI を作る時はプリセット(solarized / nord / gruvbox 等)を `[data-theme="..."]` セットとして増やすだけで対応できる構造に
+
+### 2026-05-01: 設定ファイルを Yuhitsu で開く + UI 文字列 i18n の認識合わせ
+- **氏要望**:設定確認のたびに別エディタで開いて再起動するのが面倒。Yuhitsu 自身で開けるように
+- 実装:
+  - ツールバー右端に Settings アイコン + `open-settings` コマンド (Ctrl+,)
+  - Rust `get_settings_path` で `app_data_dir()` を返す(`tauri-plugin-store` v2 が `app_data_dir` に保存するため、間違えて `app_config_dir` を使うと別ディレクトリに空ファイルを作る落とし穴あり)
+  - save() 内で「保存先が settings.json と一致したら自動 reloadSettings」(focus イベント任せだとタブ切替で発火せず取りこぼす)
+  - loadSettings の冒頭で `store.reload()`:Yuhitsu は `fs::write` で素朴に書き込むので、Tauri Store のメモリキャッシュが古いまま。reload しないと外部・内部どちらの編集も反映されない
+- **副次:i18n の現状確認**:氏が「locale 設定したのに UI が日本語のまま」と指摘 → UI 文字列はテンプレカード以外すべて日本語ハードコードであることを認識合わせ。次タスクとして i18n.ts 実装を予定
 
 ### 2026-05-01: 起動時テンプレ選択ダイアログ + 多言語テンプレート + 参考文献挿入
 - **氏方針**(議論で確立):
