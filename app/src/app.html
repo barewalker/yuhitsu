@@ -1,13 +1,103 @@
 <!doctype html>
-<html lang="ja" style="height:100%;margin:0;background:#1e1e1e">
+<html lang="ja" style="height:100%;margin:0;background:var(--bg-base)">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>右筆</title>
+    <style>
+      :root {
+        color-scheme: dark;
+
+        /* 背景レイヤー(深→浅) */
+        --bg-base: #1e1e1e;
+        --bg-elevated-1: #232323;
+        --bg-elevated-2: #2a2a2a;
+        --bg-elevated-3: #2f2f2f;
+        --bg-editor-gutter: #252525;
+        --bg-editor-active-line: #262626;
+
+        /* ボーダー */
+        --border: #3a3a3a;
+        --border-strong: #4a4a4a;
+
+        /* 文字色(強→弱) */
+        --text-strong: #ffffff;
+        --text-primary: #e6e6e6;
+        --text-secondary: #d0d0d0;
+        --text-tertiary: #c0c0c0;
+        --text-muted: #b0b0b0;
+        --text-faint: #888;
+        --text-disabled: #6a6a6a;
+
+        /* アクセント */
+        --accent: #61afef;
+        --accent-bg-subtle: #3a4a66;
+        --accent-drop: #eac;
+
+        /* ステータス */
+        --status-success: #98c379;
+        --status-error: #ff8080;
+        --status-error-strong: #ff5555;
+
+        /* Syntax highlight (One Dark 風) */
+        --syntax-keyword: #e5c07b;
+        --syntax-function: #61afef;
+        --syntax-string: #98c379;
+        --syntax-operator: #c678dd;
+        --syntax-constant: #e06c75;
+        --syntax-number: #d19a66;
+        --syntax-heading: #56b6c2;
+        --syntax-text: #abb2bf;
+        --syntax-comment: #7f848e;
+      }
+
+      /* ライトテーマ確認用 (One Light 風)
+         document.documentElement.dataset.theme = "light" で切替。
+         Phase 2 で正式 UI を入れる前提のプレビュー定義。 */
+      :root[data-theme="light"] {
+        color-scheme: light;
+
+        --bg-base: #ffffff;
+        --bg-elevated-1: #f5f5f5;
+        --bg-elevated-2: #ececec;
+        --bg-elevated-3: #e0e0e0;
+        --bg-editor-gutter: #f5f5f5;
+        --bg-editor-active-line: #f0f0f0;
+
+        --border: #d0d0d0;
+        --border-strong: #b0b0b0;
+
+        --text-strong: #000000;
+        --text-primary: #1a1a1a;
+        --text-secondary: #383a42;
+        --text-tertiary: #4a4a4a;
+        --text-muted: #6a6a6a;
+        --text-faint: #888888;
+        --text-disabled: #b0b0b0;
+
+        --accent: #1e6feb;
+        --accent-bg-subtle: #cfe0ff;
+        --accent-drop: #d97706;
+
+        --status-success: #16a34a;
+        --status-error: #dc2626;
+        --status-error-strong: #b91c1c;
+
+        --syntax-keyword: #a626a4;
+        --syntax-function: #4078f2;
+        --syntax-string: #50a14f;
+        --syntax-operator: #a626a4;
+        --syntax-constant: #e45649;
+        --syntax-number: #986801;
+        --syntax-heading: #4078f2;
+        --syntax-text: #383a42;
+        --syntax-comment: #a0a1a7;
+      }
+    </style>
     %sveltekit.head%
   </head>
-  <body data-sveltekit-preload-data="hover" style="height:100%;margin:0;background:#1e1e1e">
+  <body data-sveltekit-preload-data="hover" style="height:100%;margin:0;background:var(--bg-base)">
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

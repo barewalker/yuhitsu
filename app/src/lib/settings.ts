@@ -17,6 +17,13 @@ import {
  */
 export type EditorMode = "default" | "vim" | "emacs";
 
+export type ThemeMode = "auto" | "light" | "dark";
+
+export type AppearanceSettings = {
+  /** "auto" は OS の prefers-color-scheme に追従、"light"/"dark" は固定 */
+  theme: ThemeMode;
+};
+
 export type ToolbarSettings = {
   /** ツールバー上の項目並び。コマンド ID または "divider" */
   items: ToolbarItem[];
@@ -42,6 +49,7 @@ export type Settings = {
   editor: {
     mode: EditorMode;
   };
+  appearance: AppearanceSettings;
   toolbar: ToolbarSettings;
   keybindings: KeybindingsSettings;
   workspace: WorkspaceSettings;
@@ -53,6 +61,9 @@ export type Settings = {
 const DEFAULT_SETTINGS: Settings = {
   editor: {
     mode: "default",
+  },
+  appearance: {
+    theme: "auto",
   },
   toolbar: {
     items: getDefaultToolbarItems(),
@@ -74,6 +85,10 @@ const store = new LazyStore(STORE_FILE);
 
 function isEditorMode(value: unknown): value is EditorMode {
   return value === "default" || value === "vim" || value === "emacs";
+}
+
+function isThemeMode(value: unknown): value is ThemeMode {
+  return value === "auto" || value === "light" || value === "dark";
 }
 
 function isToolbarItem(value: unknown): value is ToolbarItem {
@@ -167,6 +182,7 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
 
 export async function loadSettings(): Promise<Settings> {
   const editorMode = await store.get<unknown>("editor.mode");
+  const themeMode = await store.get<unknown>("appearance.theme");
   const toolbarItems = await store.get<unknown>("toolbar.items");
   const keybindings = await store.get<unknown>("keybindings");
   const workspace = await store.get<unknown>("workspace");
@@ -176,6 +192,11 @@ export async function loadSettings(): Promise<Settings> {
       mode: isEditorMode(editorMode)
         ? editorMode
         : DEFAULT_SETTINGS.editor.mode,
+    },
+    appearance: {
+      theme: isThemeMode(themeMode)
+        ? themeMode
+        : DEFAULT_SETTINGS.appearance.theme,
     },
     toolbar: {
       items: parseToolbarItems(toolbarItems),
@@ -191,6 +212,11 @@ export async function loadSettings(): Promise<Settings> {
 
 export async function saveEditorMode(mode: EditorMode): Promise<void> {
   await store.set("editor.mode", mode);
+  await store.save();
+}
+
+export async function saveTheme(theme: ThemeMode): Promise<void> {
+  await store.set("appearance.theme", theme);
   await store.save();
 }
 

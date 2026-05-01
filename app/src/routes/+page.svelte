@@ -15,8 +15,10 @@
   import {
     type EditorMode,
     type KeybindingsSettings,
+    type ThemeMode,
     loadSettings,
     saveEditorMode,
+    saveTheme,
     saveWorkspace,
   } from "$lib/settings";
   import type { LSPClient } from "@codemirror/lsp-client";
@@ -57,6 +59,7 @@
   let lspClient = $derived(lspSession?.client ?? null);
 
   let editorMode = $state<EditorMode>("default");
+  let themeMode = $state<ThemeMode>("auto");
 
   // ツールバーの並び・キーバインドは設定で書き換え可能。
   // 設定読み込み完了までは getDefaultToolbarItems() を表示する。
@@ -84,12 +87,48 @@
     emacs: "emacs",
   };
 
+  const THEME_LABELS: Record<ThemeMode, string> = {
+    auto: "自動",
+    light: "ライト",
+    dark: "ダーク",
+  };
+
   async function changeEditorMode(next: EditorMode) {
     editorMode = next;
     try {
       await saveEditorMode(next);
     } catch (e) {
       // 永続化失敗は致命的でないので info で控えめに通知
+      setStatus(`設定保存に失敗: ${String(e)}`, "error");
+    }
+  }
+
+  // テーマを documentElement に反映する。"auto" は prefers-color-scheme を見て
+  // 解決後の dark/light を適用。"auto" 中に OS 側が変わったら matchMedia で追従。
+  function resolveTheme(t: ThemeMode): "light" | "dark" {
+    if (t === "auto") {
+      return window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark";
+    }
+    return t;
+  }
+
+  function applyTheme(t: ThemeMode) {
+    const resolved = resolveTheme(t);
+    if (resolved === "light") {
+      document.documentElement.dataset.theme = "light";
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+  }
+
+  async function changeTheme(next: ThemeMode) {
+    themeMode = next;
+    applyTheme(next);
+    try {
+      await saveTheme(next);
+    } catch (e) {
       setStatus(`設定保存に失敗: ${String(e)}`, "error");
     }
   }
@@ -898,6 +937,7 @@
   onMount(() => {
     let unlisten: (() => void) | undefined;
     let unlistenDrop: (() => void) | undefined;
+    let unlistenSystemTheme: (() => void) | undefined;
     (async () => {
       const win = getCurrentWindow();
       unlisten = await win.onCloseRequested(async (event) => {
@@ -924,6 +964,8 @@
       try {
         const settings = await loadSettings();
         editorMode = settings.editor.mode;
+        themeMode = settings.appearance.theme;
+        applyTheme(themeMode);
         toolbarItems = settings.toolbar.items;
         keybindings = settings.keybindings;
         previewVisible = settings.workspace.previewVisible;
@@ -938,6 +980,14 @@
       } catch (e) {
         console.warn("settings load failed, using defaults:", e);
       }
+      // "auto" 中に OS のテーマ設定が変わったら追従する
+      const mql = window.matchMedia("(prefers-color-scheme: light)");
+      const onSystemThemeChange = () => {
+        if (themeMode === "auto") applyTheme("auto");
+      };
+      mql.addEventListener("change", onSystemThemeChange);
+      unlistenSystemTheme = () =>
+        mql.removeEventListener("change", onSystemThemeChange);
       // ウィンドウへの画像ファイル D&D を受け取り、ドロップされた最初の
       // 画像を現在のカーソル位置に挿入する。Tauri 2 の onDragDropEvent は
       // OS 経由のネイティブ D&D を捕まえる。
@@ -960,6 +1010,7 @@
     return () => {
       unlisten?.();
       unlistenDrop?.();
+      unlistenSystemTheme?.();
     };
   });
 </script>
@@ -993,6 +1044,18 @@
           changeEditorMode((e.currentTarget as HTMLSelectElement).value as EditorMode)}
       >
         {#each Object.entries(EDITOR_MODE_LABELS) as [value, label]}
+          <option {value}>{label}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="mode-select">
+      テーマ:
+      <select
+        value={themeMode}
+        onchange={(e) =>
+          changeTheme((e.currentTarget as HTMLSelectElement).value as ThemeMode)}
+      >
+        {#each Object.entries(THEME_LABELS) as [value, label]}
           <option {value}>{label}</option>
         {/each}
       </select>
@@ -1171,16 +1234,12 @@
 </div>
 
 <style>
-  :global(:root) {
-    color-scheme: dark;
-  }
-
   :global(html, body) {
     margin: 0;
     height: 100%;
     font-family: system-ui, sans-serif;
-    background: #1e1e1e;
-    color: #e6e6e6;
+    background: var(--bg-base);
+    color: var(--text-primary);
   }
 
   .app {
@@ -1194,39 +1253,39 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: #2a2a2a;
-    border-bottom: 1px solid #3a3a3a;
+    background: var(--bg-elevated-2);
+    border-bottom: 1px solid var(--border);
   }
 
   .toolbar button {
     padding: 4px 10px;
-    background: #3a3a3a;
-    color: #e6e6e6;
-    border: 1px solid #4a4a4a;
+    background: var(--border);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     cursor: pointer;
     font-size: 13px;
   }
 
   .toolbar button:hover {
-    background: #4a4a4a;
+    background: var(--border-strong);
   }
 
   .toolbar button:disabled {
-    color: #6a6a6a;
-    background: #2f2f2f;
-    border-color: #3a3a3a;
+    color: var(--text-disabled);
+    background: var(--bg-elevated-3);
+    border-color: var(--border);
     cursor: not-allowed;
   }
 
   .toolbar button:disabled:hover {
-    background: #2f2f2f;
+    background: var(--bg-elevated-3);
   }
 
   .toolbar-divider {
     width: 1px;
     align-self: stretch;
-    background: #3a3a3a;
+    background: var(--border);
     margin: 2px 4px;
   }
 
@@ -1249,13 +1308,13 @@
     align-items: center;
     gap: 4px;
     font-size: 12px;
-    color: #b0b0b0;
+    color: var(--text-muted);
   }
 
   .mode-select select {
-    background: #3a3a3a;
-    color: #e6e6e6;
-    border: 1px solid #4a4a4a;
+    background: var(--border);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
     padding: 3px 6px;
     font-size: 12px;
@@ -1265,7 +1324,7 @@
   .filename {
     margin-left: 8px;
     font-size: 13px;
-    color: #b0b0b0;
+    color: var(--text-muted);
   }
 
   .status {
@@ -1278,11 +1337,11 @@
   }
 
   .status-error {
-    color: #ff8080;
+    color: var(--status-error);
   }
 
   .status-info {
-    color: #98c379;
+    color: var(--status-success);
   }
 
   .workspace {
@@ -1310,8 +1369,8 @@
   .tabbar {
     display: flex;
     align-items: stretch;
-    background: #232323;
-    border-bottom: 1px solid #2a2a2a;
+    background: var(--bg-elevated-1);
+    border-bottom: 1px solid var(--bg-elevated-2);
     overflow-x: auto;
     overflow-y: hidden;
     flex-shrink: 0;
@@ -1321,8 +1380,8 @@
   .tab {
     display: flex;
     align-items: center;
-    border-right: 1px solid #2a2a2a;
-    background: #2a2a2a;
+    border-right: 1px solid var(--bg-elevated-2);
+    background: var(--bg-elevated-2);
     min-width: 110px;
     max-width: 220px;
     flex-shrink: 0;
@@ -1333,7 +1392,7 @@
   }
 
   .tab.active {
-    background: #1e1e1e;
+    background: var(--bg-base);
   }
 
   .tab.dragging {
@@ -1341,7 +1400,7 @@
   }
 
   .tab.drag-over {
-    box-shadow: inset 2px 0 0 #61afef;
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   .tab-label {
@@ -1350,7 +1409,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 10px;
-    color: #b0b0b0;
+    color: var(--text-muted);
     font-size: 12px;
     height: 100%;
     overflow: hidden;
@@ -1358,7 +1417,7 @@
   }
 
   .tab.active .tab-label {
-    color: #ffffff;
+    color: var(--text-strong);
   }
 
   .tab-name {
@@ -1369,7 +1428,7 @@
   }
 
   .tab-dirty {
-    color: #61afef;
+    color: var(--accent);
     font-size: 10px;
     flex-shrink: 0;
   }
@@ -1378,7 +1437,7 @@
     padding: 0 8px;
     background: transparent;
     border: none;
-    color: #777;
+    color: var(--text-faint);
     cursor: pointer;
     font-size: 14px;
     height: 100%;
@@ -1386,8 +1445,8 @@
   }
 
   .tab-close:hover {
-    color: #ffffff;
-    background: #3a3a3a;
+    color: var(--text-strong);
+    background: var(--border);
   }
 
   .tab-new {
@@ -1395,15 +1454,15 @@
     height: 100%;
     background: transparent;
     border: none;
-    color: #888;
+    color: var(--text-faint);
     cursor: pointer;
     font-size: 16px;
     flex-shrink: 0;
   }
 
   .tab-new:hover {
-    background: #2a2a2a;
-    color: #ffffff;
+    background: var(--bg-elevated-2);
+    color: var(--text-strong);
   }
 
   .editor-pane,
@@ -1416,7 +1475,7 @@
 
   .preview-pane {
     flex: 1 1 0;
-    background: #2a2a2a;
+    background: var(--bg-elevated-2);
   }
 
   .project-pane {
@@ -1424,8 +1483,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    background: #232323;
-    border-right: 1px solid #2a2a2a;
+    background: var(--bg-elevated-1);
+    border-right: 1px solid var(--bg-elevated-2);
   }
 
   .project-header {
@@ -1433,7 +1492,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid var(--bg-elevated-2);
     font-size: 12px;
   }
 
@@ -1442,27 +1501,27 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: #d0d0d0;
+    color: var(--text-secondary);
     font-weight: 600;
   }
 
   .folder-name.muted {
-    color: #888;
+    color: var(--text-faint);
     font-weight: 400;
   }
 
   .header-action {
     padding: 2px 8px;
-    background: #3a3a3a;
-    color: #d0d0d0;
-    border: 1px solid #4a4a4a;
+    background: var(--border);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
     border-radius: 3px;
     font-size: 11px;
     cursor: pointer;
   }
 
   .header-action:hover {
-    background: #4a4a4a;
+    background: var(--border-strong);
   }
 
   .project-body {
@@ -1475,7 +1534,7 @@
   .splitter {
     flex: 0 0 6px;
     align-self: stretch;
-    background: #2a2a2a;
+    background: var(--bg-elevated-2);
     cursor: col-resize;
     user-select: none;
     touch-action: none;
@@ -1483,11 +1542,11 @@
   }
 
   .splitter:hover {
-    background: #4a4a4a;
+    background: var(--border-strong);
   }
 
   .splitter.dragging {
-    background: #61afef;
+    background: var(--accent);
   }
 
   .preview-frame {
@@ -1507,20 +1566,20 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6a6a6a;
+    color: var(--text-disabled);
     font-size: 13px;
     padding: 16px;
     text-align: center;
   }
 
   .placeholder.error {
-    color: #ff8080;
+    color: var(--status-error);
   }
 
   .placeholder small {
     display: block;
     margin-top: 8px;
-    color: #888;
+    color: var(--text-faint);
     font-size: 11px;
     word-break: break-all;
   }

@@ -110,7 +110,7 @@
     padding: 3px 8px;
     background: transparent;
     border: none;
-    color: #d0d0d0;
+    color: var(--text-secondary);
     font-size: 12px;
     text-align: left;
     cursor: pointer;
@@ -118,26 +118,26 @@
   }
 
   .row:hover {
-    background: #2f2f2f;
+    background: var(--bg-elevated-3);
   }
 
   .row.active {
-    background: #3a4a66;
-    color: #ffffff;
+    background: var(--accent-bg-subtle);
+    color: var(--text-strong);
   }
 
   .row :global(.chev) {
-    color: #888;
+    color: var(--text-faint);
     flex-shrink: 0;
   }
 
   .row :global(.ic) {
-    color: #c0c0c0;
+    color: var(--text-tertiary);
     flex-shrink: 0;
   }
 
   .row.active :global(.ic) {
-    color: #ffffff;
+    color: var(--text-strong);
   }
 
   .label {

@@ -33,45 +33,45 @@
   // ダーク背景向けに One Dark 風の配色を自前定義
   // (パッケージ同梱の TypstHighlightSytle はライト背景前提で黒に埋没するため不採用)
   const highlightStyle = HighlightStyle.define([
-    { tag: t.heading, color: "#e5c07b", fontWeight: "bold" },
-    { tag: t.heading1, color: "#e5c07b", fontWeight: "bold" },
-    { tag: t.heading2, color: "#e5c07b", fontWeight: "bold" },
-    { tag: t.heading3, color: "#e5c07b", fontWeight: "bold" },
-    { tag: t.heading4, color: "#e5c07b", fontWeight: "bold" },
-    { tag: t.strong, color: "#e6e6e6", fontWeight: "bold" },
-    { tag: t.emphasis, color: "#e6e6e6", fontStyle: "italic" },
-    { tag: t.link, color: "#61afef", textDecoration: "underline" },
-    { tag: t.url, color: "#61afef", textDecoration: "underline" },
-    { tag: t.monospace, color: "#98c379" },
-    { tag: t.literal, color: "#98c379" },
-    { tag: t.string, color: "#98c379" },
-    { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.modifier], color: "#c678dd" },
-    { tag: t.function(t.variableName), color: "#61afef" },
-    { tag: t.variableName, color: "#e06c75" },
-    { tag: t.propertyName, color: "#e06c75" },
-    { tag: t.labelName, color: "#d19a66" },
-    { tag: t.number, color: "#d19a66" },
-    { tag: t.bool, color: "#d19a66" },
-    { tag: [t.atom, t.null], color: "#56b6c2" },
-    { tag: t.operator, color: "#56b6c2" },
-    { tag: [t.punctuation, t.bracket, t.brace, t.paren], color: "#56b6c2" },
-    { tag: t.comment, color: "#7f848e", fontStyle: "italic" },
-    { tag: t.escape, color: "#56b6c2" },
-    { tag: t.typeName, color: "#e5c07b" },
-    { tag: t.tagName, color: "#e06c75" },
-    { tag: t.attributeName, color: "#d19a66" },
-    { tag: t.meta, color: "#7f848e" },
-    { tag: t.invalid, color: "#ff5555" },
+    { tag: t.heading, color: "var(--syntax-keyword)", fontWeight: "bold" },
+    { tag: t.heading1, color: "var(--syntax-keyword)", fontWeight: "bold" },
+    { tag: t.heading2, color: "var(--syntax-keyword)", fontWeight: "bold" },
+    { tag: t.heading3, color: "var(--syntax-keyword)", fontWeight: "bold" },
+    { tag: t.heading4, color: "var(--syntax-keyword)", fontWeight: "bold" },
+    { tag: t.strong, color: "var(--text-primary)", fontWeight: "bold" },
+    { tag: t.emphasis, color: "var(--text-primary)", fontStyle: "italic" },
+    { tag: t.link, color: "var(--syntax-function)", textDecoration: "underline" },
+    { tag: t.url, color: "var(--syntax-function)", textDecoration: "underline" },
+    { tag: t.monospace, color: "var(--syntax-string)" },
+    { tag: t.literal, color: "var(--syntax-string)" },
+    { tag: t.string, color: "var(--syntax-string)" },
+    { tag: [t.keyword, t.controlKeyword, t.definitionKeyword, t.modifier], color: "var(--syntax-operator)" },
+    { tag: t.function(t.variableName), color: "var(--syntax-function)" },
+    { tag: t.variableName, color: "var(--syntax-constant)" },
+    { tag: t.propertyName, color: "var(--syntax-constant)" },
+    { tag: t.labelName, color: "var(--syntax-number)" },
+    { tag: t.number, color: "var(--syntax-number)" },
+    { tag: t.bool, color: "var(--syntax-number)" },
+    { tag: [t.atom, t.null], color: "var(--syntax-heading)" },
+    { tag: t.operator, color: "var(--syntax-heading)" },
+    { tag: [t.punctuation, t.bracket, t.brace, t.paren], color: "var(--syntax-heading)" },
+    { tag: t.comment, color: "var(--syntax-comment)", fontStyle: "italic" },
+    { tag: t.escape, color: "var(--syntax-heading)" },
+    { tag: t.typeName, color: "var(--syntax-keyword)" },
+    { tag: t.tagName, color: "var(--syntax-constant)" },
+    { tag: t.attributeName, color: "var(--syntax-number)" },
+    { tag: t.meta, color: "var(--syntax-comment)" },
+    { tag: t.invalid, color: "var(--status-error-strong)" },
     // codemirror-lang-typst 固有のタグマッピング:
     //   ListMarker(`-`) / EnumMarker(`+`)    → t.list
     //   TermMarker(`/`)                       → t.definitionOperator
     //   見出しの `=` 等                        → t.processingInstruction
-    { tag: t.list, color: "#56b6c2" },
-    { tag: t.definitionOperator, color: "#56b6c2" },
-    { tag: t.processingInstruction, color: "#56b6c2" },
+    { tag: t.list, color: "var(--syntax-heading)" },
+    { tag: t.definitionOperator, color: "var(--syntax-heading)" },
+    { tag: t.processingInstruction, color: "var(--syntax-heading)" },
     // 同パッケージは識別子に t.name も使う(関数呼び出しではない裸の参照など)
-    { tag: t.name, color: "#abb2bf" },
-    { tag: [t.moduleKeyword, t.operatorKeyword], color: "#c678dd" },
+    { tag: t.name, color: "var(--syntax-text)" },
+    { tag: [t.moduleKeyword, t.operatorKeyword], color: "var(--syntax-operator)" },
   ]);
 
   export type LanguageMode = "typst" | "plain";
@@ -153,8 +153,8 @@
   const theme = EditorView.theme(
     {
       "&": {
-        backgroundColor: "#1e1e1e",
-        color: "#e6e6e6",
+        backgroundColor: "var(--bg-base)",
+        color: "var(--text-primary)",
         fontSize: "14px",
       },
       ".cm-scroller": {
@@ -163,26 +163,26 @@
         lineHeight: "1.5",
       },
       ".cm-content": {
-        caretColor: "#e6e6e6",
+        caretColor: "var(--text-primary)",
         padding: "8px 0",
       },
       ".cm-gutters": {
-        backgroundColor: "#252525",
-        color: "#7a7a7a",
+        backgroundColor: "var(--bg-editor-gutter)",
+        color: "var(--text-faint)",
         border: "none",
       },
       ".cm-activeLine": {
-        backgroundColor: "#262626",
+        backgroundColor: "var(--bg-editor-active-line)",
       },
       ".cm-activeLineGutter": {
-        backgroundColor: "#2a2a2a",
-        color: "#c0c0c0",
+        backgroundColor: "var(--bg-elevated-2)",
+        color: "var(--text-tertiary)",
       },
       ".cm-cursor, .cm-dropCursor": {
-        borderLeftColor: "#e6e6e6",
+        borderLeftColor: "var(--text-primary)",
       },
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-        backgroundColor: "#3a4a66",
+        backgroundColor: "var(--accent-bg-subtle)",
       },
     },
     { dark: true },
@@ -304,9 +304,9 @@
     max-width: 60vw;
     max-height: 50vh;
     overflow: auto;
-    background: #232323;
-    border: 1px solid #3a3a3a;
-    color: #d0d0d0;
+    background: var(--bg-elevated-1);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
     border-radius: 4px;
   }
 
