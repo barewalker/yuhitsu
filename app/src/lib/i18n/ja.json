@@ -1,0 +1,93 @@
+{
+  "app": {
+    "name": "右筆"
+  },
+  "command": {
+    "newTab": "新規タブ",
+    "newFromTemplate": "テンプレートから新規",
+    "open": "開く",
+    "openFolder": "フォルダを開く",
+    "save": "保存",
+    "saveAs": "名前を付けて保存",
+    "closeTab": "タブを閉じる",
+    "exportPdf": "PDF 出力",
+    "bold": "太字",
+    "italic": "斜体",
+    "heading1": "見出し 1",
+    "heading2": "見出し 2",
+    "heading3": "見出し 3",
+    "bulletList": "箇条書きリスト",
+    "numberedList": "番号付きリスト",
+    "math": "数式",
+    "codeInline": "コード(インライン)",
+    "codeBlock": "コード(ブロック)",
+    "link": "リンク",
+    "footnote": "脚注",
+    "quote": "引用",
+    "image": "画像",
+    "table": "表",
+    "bibliography": "参考文献ファイルを挿入",
+    "toggleProjectView": "プロジェクトビュー表示切替",
+    "togglePreview": "プレビュー表示切替",
+    "openSettings": "設定ファイルを開く"
+  },
+  "tab": {
+    "untitled": "(無題)"
+  },
+  "dialog": {
+    "title": "右筆",
+    "discardTabUntitled": "未保存の変更があります。名前をつけて保存しますか?",
+    "discardTabSaved": "未保存の変更があります。保存しますか?",
+    "exitApp": "未保存の変更があります。終了してよろしいですか?",
+    "buttonSave": "保存",
+    "buttonDontSave": "保存しない"
+  },
+  "placeholder": {
+    "loading": "読み込み中…",
+    "editorLoading": "エディタを読み込み中…",
+    "previewLoading": "プレビューを起動中…",
+    "previewIdle": "ファイルを開く、または保存するとプレビューが表示されます。",
+    "previewFailed": "プレビューの起動に失敗しました。"
+  },
+  "preview": {
+    "frameTitle": "プレビュー"
+  },
+  "splitter": {
+    "previewBoundary": "エディタとプレビューの境界",
+    "projectBoundary": "プロジェクトビューとエディタの境界"
+  },
+  "project": {
+    "noFolder": "フォルダ未選択",
+    "open": "開く",
+    "change": "変更",
+    "refresh": "更新",
+    "refreshTooltip": "再読み込み",
+    "openHint": "「フォルダを開く」を押して、文書プロジェクトのフォルダを選んでください。"
+  },
+  "preset": {
+    "standard": "標準",
+    "minimal": "ミニマル",
+    "academic": "論文寄り"
+  },
+  "filter": {
+    "typst": "Typst",
+    "pdf": "PDF",
+    "image": "画像",
+    "bibliography": "参考文献"
+  },
+  "status": {
+    "pdfNotTypst": "PDF 出力は Typst (.typ) ファイルのみ対応しています。",
+    "pdfNotSaved": "PDF を書き出す前に、ファイルを保存してください。",
+    "pdfWriting": "PDF を書き出し中…",
+    "pdfWritten": "{prefix}PDF を書き出しました: {path}",
+    "pdfPrefixSaved": "保存してから ",
+    "templateMissing": "テンプレートが見つかりません: {id}",
+    "folderLoadFailed": "フォルダの読み込みに失敗: {error}",
+    "openExternalFailed": "外部で開くのに失敗: {error}",
+    "lspStartFailed": "LSP 起動に失敗: {error}",
+    "settingsSaveFailed": "設定保存に失敗: {error}"
+  },
+  "templateDialog": {
+    "ariaLabel": "テンプレート選択"
+  }
+}

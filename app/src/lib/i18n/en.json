@@ -1,0 +1,93 @@
+{
+  "app": {
+    "name": "Yuhitsu"
+  },
+  "command": {
+    "newTab": "New tab",
+    "newFromTemplate": "New from template",
+    "open": "Open",
+    "openFolder": "Open folder",
+    "save": "Save",
+    "saveAs": "Save as",
+    "closeTab": "Close tab",
+    "exportPdf": "Export PDF",
+    "bold": "Bold",
+    "italic": "Italic",
+    "heading1": "Heading 1",
+    "heading2": "Heading 2",
+    "heading3": "Heading 3",
+    "bulletList": "Bullet list",
+    "numberedList": "Numbered list",
+    "math": "Math",
+    "codeInline": "Code (inline)",
+    "codeBlock": "Code (block)",
+    "link": "Link",
+    "footnote": "Footnote",
+    "quote": "Quote",
+    "image": "Image",
+    "table": "Table",
+    "bibliography": "Insert bibliography file",
+    "toggleProjectView": "Toggle project view",
+    "togglePreview": "Toggle preview",
+    "openSettings": "Open settings file"
+  },
+  "tab": {
+    "untitled": "(Untitled)"
+  },
+  "dialog": {
+    "title": "Yuhitsu",
+    "discardTabUntitled": "There are unsaved changes. Save as a new file?",
+    "discardTabSaved": "There are unsaved changes. Save?",
+    "exitApp": "There are unsaved changes. Quit anyway?",
+    "buttonSave": "Save",
+    "buttonDontSave": "Don't save"
+  },
+  "placeholder": {
+    "loading": "Loading…",
+    "editorLoading": "Loading editor…",
+    "previewLoading": "Starting preview…",
+    "previewIdle": "Open or save a file to see the preview.",
+    "previewFailed": "Failed to start preview."
+  },
+  "preview": {
+    "frameTitle": "Preview"
+  },
+  "splitter": {
+    "previewBoundary": "Editor / preview boundary",
+    "projectBoundary": "Project view / editor boundary"
+  },
+  "project": {
+    "noFolder": "No folder selected",
+    "open": "Open",
+    "change": "Change",
+    "refresh": "Refresh",
+    "refreshTooltip": "Reload",
+    "openHint": "Press \"Open folder\" to choose a project directory."
+  },
+  "preset": {
+    "standard": "Standard",
+    "minimal": "Minimal",
+    "academic": "Academic"
+  },
+  "filter": {
+    "typst": "Typst",
+    "pdf": "PDF",
+    "image": "Image",
+    "bibliography": "Bibliography"
+  },
+  "status": {
+    "pdfNotTypst": "PDF export only supports Typst (.typ) files.",
+    "pdfNotSaved": "Save the file before exporting to PDF.",
+    "pdfWriting": "Writing PDF…",
+    "pdfWritten": "{prefix}PDF written: {path}",
+    "pdfPrefixSaved": "Saved, then ",
+    "templateMissing": "Template not found: {id}",
+    "folderLoadFailed": "Failed to load folder: {error}",
+    "openExternalFailed": "Failed to open externally: {error}",
+    "lspStartFailed": "Failed to start LSP: {error}",
+    "settingsSaveFailed": "Failed to save settings: {error}"
+  },
+  "templateDialog": {
+    "ariaLabel": "Template selection"
+  }
+}

@@ -9,6 +9,7 @@
   import type { Component } from "svelte";
   import type { TemplateMeta } from "$lib/templates";
   import type { Locale } from "$lib/i18n/locale";
+  import { t } from "$lib/i18n/index.svelte";
 
   // Lucide アイコンを meta.icon の文字列で動的に解決
   import File from "@lucide/svelte/icons/file";
@@ -66,7 +67,7 @@
     class="dialog"
     role="dialog"
     aria-modal="true"
-    aria-label="Template selection"
+    aria-label={t("templateDialog.ariaLabel")}
     tabindex="-1"
     onclick={(e) => e.stopPropagation()}
     onkeydown={() => {}}

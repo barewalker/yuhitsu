@@ -106,8 +106,8 @@ export interface CommandContext {
 
 export interface CommandDef {
   id: CommandId;
-  /** メニュー / ホバー / 設定画面で出す日本語ラベル */
-  label: string;
+  /** i18n 辞書キー。表示時は t(def.labelKey) を呼んで現在 locale で解決する */
+  labelKey: string;
   /** ツールバーに表示するアイコン(Lucide コンポーネント) */
   icon: LucideIcon;
   /** ボタンに当てる装飾クラス。装飾系は `fmt` 等 */
@@ -134,7 +134,7 @@ function editorRun(
 export const COMMANDS: Record<CommandId, CommandDef> = {
   "new-tab": {
     id: "new-tab",
-    label: "新規タブ",
+    labelKey: "command.newTab",
     icon: FilePlus,
     defaultKey: "Mod-t",
     needsEditor: false,
@@ -142,7 +142,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "new-from-template": {
     id: "new-from-template",
-    label: "テンプレートから新規",
+    labelKey: "command.newFromTemplate",
     icon: FilePlus2,
     defaultKey: "Mod-Shift-t",
     needsEditor: false,
@@ -150,7 +150,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "open-file": {
     id: "open-file",
-    label: "開く",
+    labelKey: "command.open",
     icon: FolderOpen,
     defaultKey: "Mod-o",
     needsEditor: false,
@@ -158,7 +158,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "open-folder": {
     id: "open-folder",
-    label: "フォルダを開く",
+    labelKey: "command.openFolder",
     icon: FolderTree,
     defaultKey: "Mod-Shift-o",
     needsEditor: false,
@@ -166,7 +166,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   save: {
     id: "save",
-    label: "保存",
+    labelKey: "command.save",
     icon: Save,
     defaultKey: "Mod-s",
     needsEditor: false,
@@ -174,7 +174,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "save-as": {
     id: "save-as",
-    label: "名前を付けて保存",
+    labelKey: "command.saveAs",
     icon: SaveAll,
     defaultKey: "Mod-Shift-s",
     needsEditor: false,
@@ -182,7 +182,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "close-tab": {
     id: "close-tab",
-    label: "タブを閉じる",
+    labelKey: "command.closeTab",
     icon: X,
     defaultKey: "Mod-w",
     needsEditor: false,
@@ -190,7 +190,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "export-pdf": {
     id: "export-pdf",
-    label: "PDF 出力",
+    labelKey: "command.exportPdf",
     icon: FileDown,
     defaultKey: "Mod-e",
     needsEditor: false,
@@ -198,7 +198,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   bold: {
     id: "bold",
-    label: "太字",
+    labelKey: "command.bold",
     icon: Bold,
     defaultKey: "Mod-b",
     needsEditor: true,
@@ -206,7 +206,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   italic: {
     id: "italic",
-    label: "斜体",
+    labelKey: "command.italic",
     icon: Italic,
     defaultKey: "Mod-i",
     needsEditor: true,
@@ -214,105 +214,105 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "heading-1": {
     id: "heading-1",
-    label: "見出し 1",
+    labelKey: "command.heading1",
     icon: Heading1,
     needsEditor: true,
     run: editorRun((v) => applyHeading(v, 1)),
   },
   "heading-2": {
     id: "heading-2",
-    label: "見出し 2",
+    labelKey: "command.heading2",
     icon: Heading2,
     needsEditor: true,
     run: editorRun((v) => applyHeading(v, 2)),
   },
   "heading-3": {
     id: "heading-3",
-    label: "見出し 3",
+    labelKey: "command.heading3",
     icon: Heading3,
     needsEditor: true,
     run: editorRun((v) => applyHeading(v, 3)),
   },
   "bullet-list": {
     id: "bullet-list",
-    label: "箇条書きリスト",
+    labelKey: "command.bulletList",
     icon: List,
     needsEditor: true,
     run: editorRun(toggleBulletList),
   },
   "numbered-list": {
     id: "numbered-list",
-    label: "番号付きリスト",
+    labelKey: "command.numberedList",
     icon: ListOrdered,
     needsEditor: true,
     run: editorRun(toggleNumberedList),
   },
   math: {
     id: "math",
-    label: "数式",
+    labelKey: "command.math",
     icon: Sigma,
     needsEditor: true,
     run: editorRun(toggleMath),
   },
   "code-inline": {
     id: "code-inline",
-    label: "コード(インライン)",
+    labelKey: "command.codeInline",
     icon: Code,
     needsEditor: true,
     run: editorRun(toggleInlineCode),
   },
   "code-block": {
     id: "code-block",
-    label: "コード(ブロック)",
+    labelKey: "command.codeBlock",
     icon: CodeXml,
     needsEditor: true,
     run: editorRun(insertCodeBlock),
   },
   link: {
     id: "link",
-    label: "リンク",
+    labelKey: "command.link",
     icon: LinkIcon,
     needsEditor: true,
     run: editorRun(insertLink),
   },
   footnote: {
     id: "footnote",
-    label: "脚注",
+    labelKey: "command.footnote",
     icon: Asterisk,
     needsEditor: true,
     run: editorRun(insertFootnote),
   },
   quote: {
     id: "quote",
-    label: "引用",
+    labelKey: "command.quote",
     icon: Quote,
     needsEditor: true,
     run: editorRun(insertQuote),
   },
   image: {
     id: "image",
-    label: "画像",
+    labelKey: "command.image",
     icon: ImageIcon,
     needsEditor: true,
     run: (ctx) => ctx.pickAndInsertImage(),
   },
   table: {
     id: "table",
-    label: "表",
+    labelKey: "command.table",
     icon: TableIcon,
     needsEditor: true,
     run: editorRun((v) => insertTable(v)),
   },
   bibliography: {
     id: "bibliography",
-    label: "参考文献ファイルを挿入",
+    labelKey: "command.bibliography",
     icon: BookOpen,
     needsEditor: true,
     run: (ctx) => ctx.pickAndInsertBibliography(),
   },
   "toggle-project-view": {
     id: "toggle-project-view",
-    label: "プロジェクトビュー表示切替",
+    labelKey: "command.toggleProjectView",
     icon: PanelLeft,
     defaultKey: "Mod-Shift-e",
     needsEditor: false,
@@ -320,7 +320,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "toggle-preview": {
     id: "toggle-preview",
-    label: "プレビュー表示切替",
+    labelKey: "command.togglePreview",
     icon: PanelRight,
     defaultKey: "Mod-Shift-p",
     needsEditor: false,
@@ -328,7 +328,7 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
   },
   "open-settings": {
     id: "open-settings",
-    label: "設定ファイルを開く",
+    labelKey: "command.openSettings",
     icon: Settings,
     defaultKey: "Mod-,",
     needsEditor: false,
@@ -343,14 +343,15 @@ export type ToolbarItem = CommandId | "divider";
 // 「リセット」操作の参照値として使う。
 export interface ToolbarPreset {
   id: string;
-  label: string;
+  /** i18n 辞書キー(例: "preset.standard")。表示時に t() を呼ぶ */
+  labelKey: string;
   items: ToolbarItem[];
 }
 
 export const TOOLBAR_PRESETS: ToolbarPreset[] = [
   {
     id: "standard",
-    label: "標準",
+    labelKey: "preset.standard",
     items: [
       "new-tab",
       "new-from-template",
@@ -385,7 +386,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
   },
   {
     id: "minimal",
-    label: "ミニマル",
+    labelKey: "preset.minimal",
     items: [
       "new-tab",
       "open-file",
@@ -406,7 +407,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
   },
   {
     id: "academic",
-    label: "論文寄り",
+    labelKey: "preset.academic",
     items: [
       "new-tab",
       "new-from-template",

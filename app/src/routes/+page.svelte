@@ -30,6 +30,7 @@
   import ProjectTree from "$lib/ProjectTree.svelte";
   import TemplateDialog from "$lib/TemplateDialog.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
+  import { setLocale, t } from "$lib/i18n/index.svelte";
   import { listTemplates, resolveTemplate } from "$lib/templates";
   import {
     COMMANDS,
@@ -127,6 +128,9 @@
       themeMode = settings.appearance.theme;
       applyTheme(themeMode);
       localeMode = settings.appearance.locale;
+      // i18n 辞書側に locale を伝達(resolvedLocale は derived だが、
+      // setLocale は明示呼び出しが必要)
+      setLocale(resolveLocale(localeMode));
       paperSize = settings.document.paperSize;
       toolbarItems = settings.toolbar.items;
       keybindings = settings.keybindings;
@@ -172,8 +176,10 @@
     return !!p && p.toLowerCase().endsWith(".typ");
   }
 
-  const FILTERS = [{ name: "Typst", extensions: ["typ"] }];
-  const PDF_FILTERS = [{ name: "PDF", extensions: ["pdf"] }];
+  // ファイル選択ダイアログのフィルタ。locale 変更後にも追従させたいので、
+  // 使用時に毎回 t() を呼んで生成する(関数化)。
+  const filtersTypst = () => [{ name: t("filter.typst"), extensions: ["typ"] }];
+  const filtersPdf = () => [{ name: t("filter.pdf"), extensions: ["pdf"] }];
   const IMAGE_EXTS = [
     "png",
     "jpg",
@@ -183,7 +189,7 @@
     "webp",
     "avif",
   ];
-  const IMAGE_FILTERS = [{ name: "画像", extensions: IMAGE_EXTS }];
+  const filtersImage = () => [{ name: t("filter.image"), extensions: IMAGE_EXTS }];
   const PREVIEW_URL = "http://127.0.0.1:23625/";
   // tinymist preview の HTTP サーバが立ち上がるまでの待機時間(暫定)。
   // 後で HTTP プローブに置き換える前提。
@@ -321,7 +327,7 @@
       lspSession = await startLspSession(forPath);
     } catch (e) {
       // LSP が起動しなくてもエディタ自体は使えるので、エラー表示のみ
-      setStatus(`LSP 起動に失敗: ${String(e)}`);
+      setStatus(t("status.lspStartFailed", { error: String(e) }));
     }
   }
 
@@ -381,7 +387,7 @@
     if (!tab) return false;
     try {
       const selected = await saveDialog({
-        filters: FILTERS,
+        filters: filtersTypst(),
         defaultPath: tab.path ?? "untitled.typ",
       });
       if (!selected) return false;
@@ -436,11 +442,11 @@
     const tab = getActiveTab();
     if (!tab) return;
     if (!isTypstPath(tab.path)) {
-      setStatus("PDF 出力は Typst (.typ) ファイルのみ対応しています。");
+      setStatus(t("status.pdfNotTypst"));
       return;
     }
     if (!tab.path) {
-      setStatus("PDF を書き出す前に、ファイルを保存してください。");
+      setStatus(t("status.pdfNotSaved"));
       return;
     }
     // 編集中の内容を反映させるため、未保存があれば自動で保存する。
@@ -459,7 +465,7 @@
     let outputPath: string;
     try {
       const selected = await saveDialog({
-        filters: PDF_FILTERS,
+        filters: filtersPdf(),
         defaultPath: defaultPdfPath(tab.path),
       });
       if (!selected) return;
@@ -468,11 +474,11 @@
       setStatus(String(e));
       return;
     }
-    setStatus("PDF を書き出し中…", "info");
+    setStatus(t("status.pdfWriting"), "info");
     try {
       await invoke("export_pdf", { input: tab.path, output: outputPath });
-      const prefix = savedAutomatically ? "保存してから " : "";
-      setStatus(`${prefix}PDF を書き出しました: ${outputPath}`, "info");
+      const prefix = savedAutomatically ? t("status.pdfPrefixSaved") : "";
+      setStatus(t("status.pdfWritten", { prefix, path: outputPath }), "info");
     } catch (e) {
       setStatus(String(e));
     }
@@ -604,13 +610,13 @@
       // 無題タブと既存ファイルでメッセージを変える(無題なら "名前をつけて保存")
       const isUntitled = tab.path === null;
       const message = isUntitled
-        ? "未保存の変更があります。名前をつけて保存しますか?"
-        : "未保存の変更があります。保存しますか?";
+        ? t("dialog.discardTabUntitled")
+        : t("dialog.discardTabSaved");
       const wantsSave = await ask(message, {
-        title: "右筆",
+        title: t("dialog.title"),
         kind: "warning",
-        okLabel: "保存",
-        cancelLabel: "保存しない",
+        okLabel: t("dialog.buttonSave"),
+        cancelLabel: t("dialog.buttonDontSave"),
       });
       if (wantsSave) {
         // save / saveAs は active タブを操作するので、対象タブが active で
@@ -692,7 +698,7 @@
   function onTemplateSelect(id: string) {
     const tpl = resolveTemplate(id, resolvedLocale, paperSize);
     if (!tpl) {
-      setStatus(`テンプレートが見つかりません: ${id}`, "error");
+      setStatus(t("status.templateMissing", { id }), "error");
       templateDialogOpen = false;
       markFirstRunDone();
       return;
@@ -806,7 +812,7 @@
       projectTree = await listDirectory(folder);
     } catch (e) {
       projectTree = null;
-      setStatus(`フォルダの読み込みに失敗: ${String(e)}`);
+      setStatus(t("status.folderLoadFailed", { error: String(e) }));
     }
   }
 
@@ -873,7 +879,7 @@
     try {
       await openUrl(pathToFileUri(target));
     } catch (e) {
-      setStatus(`外部で開くのに失敗: ${String(e)}`);
+      setStatus(t("status.openExternalFailed", { error: String(e) }));
     }
   }
 
@@ -911,7 +917,8 @@
   function buttonTitle(id: CommandId): string {
     const def = COMMANDS[id];
     const key = effectiveKey(id);
-    return key ? `${def.label} (${displayKey(key)})` : def.label;
+    const label = t(def.labelKey);
+    return key ? `${label} (${displayKey(key)})` : label;
   }
 
   function isImagePath(p: string): boolean {
@@ -966,7 +973,7 @@
     try {
       const selected = await openDialog({
         multiple: false,
-        filters: IMAGE_FILTERS,
+        filters: filtersImage(),
       });
       if (typeof selected !== "string") return;
       const rel = await toRelativePath(selected);
@@ -997,7 +1004,7 @@
       const selected = await openDialog({
         multiple: false,
         filters: [
-          { name: "参考文献", extensions: ["bib", "yml", "yaml"] },
+          { name: t("filter.bibliography"), extensions: ["bib", "yml", "yaml"] },
         ],
       });
       if (typeof selected !== "string") return;
@@ -1009,7 +1016,7 @@
   }
 
   function basename(p: string | null): string {
-    if (!p) return "(無題)";
+    if (!p) return t("tab.untitled");
     const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
     return i >= 0 ? p.slice(i + 1) : p;
   }
@@ -1075,8 +1082,8 @@
         }
         // preventDefault は同期で呼ぶ必要があるため、await より前に必ず呼ぶ
         event.preventDefault();
-        const ok = await ask("未保存の変更があります。終了してよろしいですか?", {
-          title: "右筆",
+        const ok = await ask(t("dialog.exitApp"), {
+          title: t("dialog.title"),
           kind: "warning",
         });
         if (ok) {
@@ -1093,6 +1100,7 @@
         themeMode = settings.appearance.theme;
         applyTheme(themeMode);
         localeMode = settings.appearance.locale;
+        setLocale(resolveLocale(localeMode));
         paperSize = settings.document.paperSize;
         firstRunDone = settings.flags.firstRunDone;
         toolbarItems = settings.toolbar.items;
@@ -1170,7 +1178,7 @@
         {@const Icon = def.icon}
         <button
           class="icon-btn"
-          aria-label={def.label}
+          aria-label={t(def.labelKey)}
           title={buttonTitle(def.id)}
           disabled={def.needsEditor && !editorView}
           onclick={() => runCommand(def.id)}
@@ -1194,20 +1202,20 @@
             >
             <button
               class="header-action"
-              title="フォルダを開く"
-              onclick={openFolder}>変更</button
+              title={t("command.openFolder")}
+              onclick={openFolder}>{t("project.change")}</button
             >
             <button
               class="header-action"
-              title="再読み込み"
-              onclick={refreshProjectTree}>更新</button
+              title={t("project.refreshTooltip")}
+              onclick={refreshProjectTree}>{t("project.refresh")}</button
             >
           {:else}
-            <span class="folder-name muted">フォルダ未選択</span>
+            <span class="folder-name muted">{t("project.noFolder")}</span>
             <button
               class="header-action"
-              title="フォルダを開く"
-              onclick={openFolder}>開く</button
+              title={t("command.openFolder")}
+              onclick={openFolder}>{t("project.open")}</button
             >
           {/if}
         </div>
@@ -1221,10 +1229,10 @@
               onToggleExpanded={toggleProjectExpanded}
             />
           {:else if currentFolder}
-            <div class="placeholder">読み込み中…</div>
+            <div class="placeholder">{t("placeholder.loading")}</div>
           {:else}
             <div class="placeholder">
-              「フォルダを開く」を押して、文書プロジェクトのフォルダを選んでください。
+              {t("project.openHint")}
             </div>
           {/if}
         </div>
@@ -1235,7 +1243,7 @@
         class:dragging={splitterTarget === "project"}
         role="separator"
         aria-orientation="vertical"
-        aria-label="プロジェクトビューとエディタの境界"
+        aria-label={t("splitter.projectBoundary")}
         onpointerdown={(e) => onSplitterDown(e, "project")}
         onpointermove={onSplitterMove}
         onpointerup={onSplitterUp}
@@ -1254,7 +1262,7 @@
             role="tab"
             aria-selected={tab.id === activeTabId}
             tabindex={tab.id === activeTabId ? 0 : -1}
-            title={tab.path ?? "(無題)"}
+            title={tab.path ?? t("tab.untitled")}
             data-tab-id={tab.id}
             onpointerdown={(e) => onTabPointerDown(e, tab.id)}
             onpointermove={onTabPointerMove}
@@ -1263,14 +1271,14 @@
           >
             <span class="tab-label">
               <span class="tab-name"
-                >{tab.path ? basename(tab.path) : "(無題)"}</span
+                >{tab.path ? basename(tab.path) : t("tab.untitled")}</span
               >
               {#if tab.dirty}<span class="tab-dirty" aria-hidden="true">●</span>{/if}
             </span>
             <button
               class="tab-close"
-              aria-label="タブを閉じる"
-              title="閉じる"
+              aria-label={t("command.closeTab")}
+              title={t("command.closeTab")}
               onpointerdown={(e) => e.stopPropagation()}
               onclick={(e) => {
                 e.stopPropagation();
@@ -1281,8 +1289,8 @@
         {/each}
         <button
           class="tab-new"
-          aria-label="新規タブ"
-          title="新規タブ"
+          aria-label={t("command.newTab")}
+          title={t("command.newTab")}
           onclick={addEmptyTab}>＋</button
         >
       </div>
@@ -1307,7 +1315,7 @@
             onValueApplied={onEditorValueApplied}
           />
         {:else}
-          <div class="placeholder">エディタを読み込み中…</div>
+          <div class="placeholder">{t("placeholder.editorLoading")}</div>
         {/if}
       </div>
 
@@ -1317,7 +1325,7 @@
           class:dragging={splitterTarget === "editor"}
           role="separator"
           aria-orientation="vertical"
-          aria-label="エディタとプレビューの境界"
+          aria-label={t("splitter.previewBoundary")}
           onpointerdown={(e) => onSplitterDown(e, "editor")}
           onpointermove={onSplitterMove}
           onpointerup={onSplitterUp}
@@ -1327,18 +1335,18 @@
         <div class="preview-pane">
           {#if previewStatus === "idle"}
             <div class="placeholder">
-              ファイルを開く、または保存するとプレビューが表示されます。
+              {t("placeholder.previewIdle")}
             </div>
           {:else if previewStatus === "starting"}
-            <div class="placeholder">プレビューを起動中…</div>
+            <div class="placeholder">{t("placeholder.previewLoading")}</div>
           {:else if previewStatus === "error"}
             <div class="placeholder error">
-              プレビューの起動に失敗しました。
+              {t("placeholder.previewFailed")}
               <br />
               <small>{previewError}</small>
             </div>
           {:else if previewStatus === "ready" && previewSrc}
-            <iframe class="preview-frame" title="プレビュー" src={previewSrc}
+            <iframe class="preview-frame" title={t("preview.frameTitle")} src={previewSrc}
             ></iframe>
           {/if}
         </div>
