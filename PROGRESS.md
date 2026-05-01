@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-04-28
-現在のフェーズ: **Phase 1 — Sprint 3 進行中(GUI 挿入ボタン最小・拡張セット完了、ツールバーをカタログ駆動化、キーバインド一括登録)**
+最終更新: 2026-05-01
+現在のフェーズ: **Phase 1 — Sprint 3 進行中(GUI 挿入・プロジェクトビュー・タブ機能・テーマ機能まで実装済み、テンプレート系が次)**
 
 ---
 
@@ -188,6 +188,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] タブの永続化(次回起動時に開いていたタブを復元)
 - [x] タブの D&D 並び替え(HTML5 Drag and Drop API、依存追加なし、ドラッグ中は半透明 + ドロップ先に左ボーダー)
 - [ ] Ctrl+Tab 切替 / 中ボタン閉じ(後回し)
+- [x] **テーマ機能(自動 / ライト / ダーク)**(Sprint 3 中に氏の要望で追加、Phase 2 予定の前倒し)
+  - [x] 全 UI 色を CSS 変数化(`app.html` の `:root` に 27 種、背景・ボーダー・文字・アクセント・ステータス・Syntax)
+  - [x] `:root[data-theme="light"]` にライトテーマ(One Light 風)を定義、`color-scheme` も追従
+  - [x] ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト追加、`settings.appearance.theme` で永続化
+  - [x] "自動" は `prefers-color-scheme` に追従、OS 側変更も `matchMedia` で即反映
+  - [x] CodeMirror の `EditorView.theme` / `HighlightStyle` も `var(...)` 化してテーマ切替に連動
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
 - [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
@@ -342,3 +348,14 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - 空白座標は「OSS × ローカル × GUI × 実用 × エージェント連携可」で、現状の市場に同等品なし。
   - **情報漏洩対策はユーザ環境構築側に委ねる**。Yuhitsu は LLM プロバイダを抽象化するに留め、特定の保護機構を凝らない。コンプライアンス厳格な現場でも、ユーザがローカル LLM や VPN 内エンドポイントを選べば採用できる、という設計。
   - **実装順序合意**:Phase 1 末で Sprint 3(起動時テンプレート選択 + GUI 挿入ボタン最小セット + フォーム型テンプレート簡素版)を前倒し → Phase 2 で内蔵 AI 機能 → Phase 3 で WYSIWYG-lite + MCP サーバ化 + Universe 連携。
+
+### 2026-05-01: テーマ機能(自動 / ライト / ダーク)を追加
+- 氏要望:**Ubuntu のダーク設定で Yuhitsu もダーク見えしているが、それは Yuhitsu 自体のテーマか OS 追従か?** を契機にテーマ対応を実装(Phase 2 予定の前倒し)
+- **判断**:公開時に複数テーマを選べる前提なので、まず CSS 変数化で素地を作り、確認用にライト固定セットを足す → 氏が「DevTools 経由は嫌、UI 欲しい」で auto/light/dark 切替セレクトまで一気に実装
+- 実装:
+  - 全 UI 色を `app.html` の `:root` に CSS 変数として集約(背景 6 / ボーダー 2 / 文字 7 / アクセント 3 / ステータス 3 / Syntax 9、計 27 種)
+  - `:root[data-theme="light"]` でライトテーマを定義(One Light 風配色、`color-scheme: light`)
+  - `+page.svelte` / `Editor.svelte`(`<style>` + CodeMirror `EditorView.theme` + `HighlightStyle`)/ `ProjectTree.svelte` の全色を `var(...)` 化
+  - `settings.ts` に `AppearanceSettings` 領域を新設、`saveTheme` を export、Tauri Store で永続化
+  - ツールバーに「テーマ: 自動 / ライト / ダーク」セレクト(操作モードの隣)。"自動" は `prefers-color-scheme` に追従、`matchMedia` で OS 側変更も即反映
+- 副次効果:Phase 2 で正式テーマ UI を作る時はプリセット(solarized / nord / gruvbox 等)を `[data-theme="..."]` セットとして増やすだけで対応できる構造に
