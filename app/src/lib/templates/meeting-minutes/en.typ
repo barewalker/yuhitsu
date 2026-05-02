@@ -10,6 +10,7 @@
   recorder: "",
   body,
 ) = {
+  set document(title: title, author: recorder)
   align(center)[
     #text(size: 16pt, weight: "bold")[#title]
   ]

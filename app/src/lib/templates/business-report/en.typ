@@ -10,6 +10,7 @@
   period: "",
   body,
 ) = {
+  set document(title: title, author: author)
   align(center)[
     #text(size: 16pt, weight: "bold")[#title]
   ]

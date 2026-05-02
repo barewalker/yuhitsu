@@ -21,7 +21,7 @@
   } from "@codemirror/commands";
   import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
   import { tags as t } from "@lezer/highlight";
-  import { typst } from "codemirror-lang-typst";
+  import { typstStreamLanguage } from "$lib/typst-stream-mode";
   import { vim } from "@replit/codemirror-vim";
   import { emacs } from "@replit/codemirror-emacs";
   import {
@@ -191,15 +191,15 @@
 
   function langExtension(target: LanguageMode): Extension {
     if (target === "plain") return [];
-    // [Phase 1 暫定 2026-05-02] Typst 用に `codemirror-lang-typst` v0.4.0 を
-    // 採用していたが、WASM Typst パーサが「単一 transaction 内に複数 changes」
-    // のケースで panic し、エディタの transaction を巻き戻す不具合がある
-    // (上流 issue #5、未修正)。具体症状はファイル末尾 #figure の caption 行
-    // 削除で「行が復活 + undo 不可」。Phase 1 段階では構文木を必要とする機能
-    // は無いので、当面は plain で運用。Phase 2 で StreamLanguage ベースの
-    // 簡易ハイライタを自作するか、上流修正待ちで戻すかを判断する。
-    return [];
-    // return [typst(), Prec.highest(syntaxHighlighting(highlightStyle))];
+    // StreamLanguage ベースの簡易ハイライタ($lib/typst-stream-mode.ts)。
+    // codemirror-lang-typst の WASM panic を避けつつ、表面的な色付け
+    // (コメント / 文字列 / 数値 / キーワード / 関数呼び出し / 見出し /
+    //  リスト / 強調 / 数式 / インラインコード)を行ベースで提供する。
+    // 完全な構文認識は LSP(tinymist)が担うので二重持ちは不要
+    return [
+      typstStreamLanguage,
+      Prec.highest(syntaxHighlighting(highlightStyle)),
+    ];
   }
 
   const theme = EditorView.theme(

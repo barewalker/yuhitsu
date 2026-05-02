@@ -12,6 +12,7 @@
   abstract: "",
   body,
 ) = {
+  set document(title: title, author: author)
   align(center)[
     #text(size: 18pt, weight: "bold")[#title]
     #v(0.5em)

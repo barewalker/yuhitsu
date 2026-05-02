@@ -10,6 +10,7 @@
   presenter: "",
   body,
 ) = {
+  set document(title: title, author: presenter)
   align(center + horizon)[
     #text(size: 40pt, weight: "bold")[#title]
     #v(1em)
