@@ -77,14 +77,28 @@
 
   export type LanguageMode = "typst" | "plain";
 
-  // ステータスバー用のカーソル情報。line / col は 1-origin、selected は
-  // 選択範囲の長さ(文字数、選択なしなら 0)、total は doc 全体の文字数。
+  // ステータスバー用のカーソル情報。line / col は 1-origin、
+  //   selected      = 選択範囲の長さ(全 code unit、選択なしなら 0)
+  //   selectedNoWs  = 選択範囲から空白を除いた文字数(原稿カウント用)
+  //   total         = doc 全体の文字数(空白・改行含む。VSCode 流儀)
+  //   totalNoWs     = doc 全体から空白(改行 / 半角・全角スペース / タブ等)
+  //                   を除いた文字数。原稿の字数感覚に近い
+  // どちらを表示するかは親側(設定 charCountMode)で切替する。
   export type CursorInfo = {
     line: number;
     col: number;
     selected: number;
+    selectedNoWs: number;
     total: number;
+    totalNoWs: number;
   };
+
+  // doc 全体から空白を除いた文字数を数える。`/\s/g` は ECMAScript 仕様で
+  // Zs カテゴリ全般を含むため、半角・全角スペース・タブ・改行をすべて
+  // 一括で取り除ける。
+  function countNonWhitespace(s: string): number {
+    return s.replace(/\s/g, "").length;
+  }
 
   type Props = {
     value: string;
@@ -238,11 +252,16 @@
       if (update.docChanged || update.selectionSet) {
         const sel = update.state.selection.main;
         const line = update.state.doc.lineAt(sel.head);
+        const docStr = update.state.doc.toString();
+        const selStr =
+          sel.from < sel.to ? update.state.sliceDoc(sel.from, sel.to) : "";
         onCursorChange?.({
           line: line.number,
           col: sel.head - line.from + 1,
           selected: sel.to - sel.from,
+          selectedNoWs: countNonWhitespace(selStr),
           total: update.state.doc.length,
+          totalNoWs: countNonWhitespace(docStr),
         });
       }
     });
@@ -275,11 +294,15 @@
     // が立った時しか走らないため、view 構築直後の値はここで明示的に流す。
     const sel = state.selection.main;
     const initLine = state.doc.lineAt(sel.head);
+    const initSelStr =
+      sel.from < sel.to ? state.sliceDoc(sel.from, sel.to) : "";
     onCursorChange?.({
       line: initLine.number,
       col: sel.head - initLine.from + 1,
       selected: sel.to - sel.from,
+      selectedNoWs: countNonWhitespace(initSelStr),
       total: state.doc.length,
+      totalNoWs: countNonWhitespace(state.doc.toString()),
     });
   });
 

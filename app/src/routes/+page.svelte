@@ -55,7 +55,9 @@
     line: number;
     col: number;
     selected: number;
+    selectedNoWs: number;
     total: number;
+    totalNoWs: number;
   };
   let Editor = $state<Component<{
     value: string;
@@ -103,6 +105,7 @@
   let projectViewVisible = $state(false);
   let projectPaneRatio = $state(0.18);
   let statusbarVisible = $state(false);
+  let charCountMode = $state<"non-whitespace" | "all">("non-whitespace");
   let workspaceEl = $state<HTMLDivElement | null>(null);
   let editPreviewEl = $state<HTMLDivElement | null>(null);
   let splitterTarget = $state<"project" | "editor" | null>(null);
@@ -280,6 +283,7 @@
       toolbarItems = settings.toolbar.items;
       keybindings = settings.keybindings;
       statusbarVisible = settings.workspace.statusbarVisible;
+      charCountMode = settings.workspace.charCountMode;
       // JSON エラー表示が残っていた時だけクリア(他の error メッセージは
       // 触らない)
       if (settingsErrorActive) {
@@ -1096,6 +1100,7 @@
       projectPaneRatio,
       currentFolder,
       statusbarVisible,
+      charCountMode,
     }).catch((e) => {
       // 永続化失敗はログのみ(ボタン操作はそのまま受け付ける)
       console.warn("workspace save failed:", e);
@@ -1690,6 +1695,17 @@
         projectPaneRatio = settings.workspace.projectPaneRatio;
         currentFolder = settings.workspace.currentFolder;
         statusbarVisible = settings.workspace.statusbarVisible;
+        charCountMode = settings.workspace.charCountMode;
+        // settings.json の絶対パスを起動時に取っておく。これがないと、
+        // ユーザが「設定を開く」コマンドを通さず別経路(プロジェクトツリー
+        // 等)で settings.json を Yuhitsu のタブに開いた場合、save() 内の
+        // 「保存先 == settingsPath なら自動 reloadSettings」ガードが
+        // 動かず、保存しても設定が即時反映されない。
+        try {
+          settingsPath = await invoke<string>("get_settings_path");
+        } catch (e) {
+          console.warn("get_settings_path on startup failed:", e);
+        }
         // 前回開いていたフォルダを復元(失敗しても致命的でない)
         if (currentFolder) {
           await loadProjectTree(currentFolder);
@@ -1986,6 +2002,10 @@
       </span>
       <span class="statusbar-counters">
         {#if cursor}
+          {@const totalShown =
+            charCountMode === "all" ? cursor.total : cursor.totalNoWs}
+          {@const selectedShown =
+            charCountMode === "all" ? cursor.selected : cursor.selectedNoWs}
           <span class="counter" data-slot="line"
             >{t("statusbar.lineCol", {
               line: String(cursor.line),
@@ -1993,12 +2013,12 @@
             })}</span
           >
           <span class="counter" data-slot="char"
-            >{cursor.selected > 0
+            >{selectedShown > 0
               ? t("statusbar.charsSelected", {
-                  selected: String(cursor.selected),
-                  total: String(cursor.total),
+                  selected: String(selectedShown),
+                  total: String(totalShown),
                 })
-              : t("statusbar.chars", { total: String(cursor.total) })}</span
+              : t("statusbar.chars", { total: String(totalShown) })}</span
           >
         {/if}
         <!-- ワードカウント(Typst コンパイル後)は Phase 2 で実装する空スロット -->

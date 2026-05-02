@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(設定読み込みエラー可視化 / タブ active 配色修正 / ステータスバー行・文字数を Phase 2 から前倒し実装)
+最終更新: 2026-05-02(設定読み込みエラー可視化 / タブ active 配色修正 / ステータスバー文字数 + 空白除外モード / 直編集と Tauri Store の衝突を防御)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -477,6 +477,25 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - Obsidian / Typora は CodeMirror 6 の Decoration API でエディタ側に被せる方式
   - tinymist preview の SVG 出力は contentEditable 化できない(SVG → Typst の逆変換不能)
   - Typst は Markdown より文法が複雑で、装飾で隠せるノード(見出し / 強調 / リスト / リンク)、プレースホルダ代用ノード(数式 / 表)、生コードのまま見せるノード(`#let` / `#import` / 関数定義)の 3 カテゴリに分かれる → Phase 3 の「設計書作成」が一番重い作業
+
+### 2026-05-02: ステータスバー文字数の空白除外モード + 設定読み込みエラー可視化 + タブ active 配色修正
+- **氏要望(charCountMode)**:文字数カウントの「空白を除外する / 含める」を選びたい。標準は除外(原稿カウント感覚)
+- 実装:
+  - `WorkspaceSettings.charCountMode: "non-whitespace" | "all"` 追加(default `"non-whitespace"`)
+  - `Editor.svelte` の `CursorInfo` に `selectedNoWs` / `totalNoWs` を追加。`countNonWhitespace()` で `/\s/g`(ECMAScript 仕様で Zs カテゴリ全般を含むため、半角・全角スペース・タブ・改行を一括除外)
+  - フロントの表示で `charCountMode === "all" ? cursor.total : cursor.totalNoWs` で切替。選択時も同じく切替
+- **設定読み込みエラー可視化**:Rust の `validate_settings_json` で `serde_json` パース → 失敗時は「行 X 列 Y: …」をステータスバーに出す。`settingsErrorActive` フラグで JSON エラーだけ自動クリア(他の error は触らない)
+- **タブ active 配色**:VSCode 流儀(active = エディタ面と同色 + 上端 2px accent 線)。ダーク/ライト両モードで一貫
+- **trap 1 — 起動時の `settingsPath` 初期化**:
+  - 過去仕様:`openSettings()` が呼ばれた時のみ `settingsPath` がセットされる
+  - 結果:プロジェクトツリー等から settings.json をタブで開くと、`save()` 内の「保存先 == settingsPath なら自動 reloadSettings」が動かず、保存しても設定が即時反映されない
+  - 修正:onMount の loadSettings 直後に `settingsPath = await invoke("get_settings_path")` を追加
+- **trap 2 — Yuhitsu 直書きと Tauri Store メモリの衝突**:
+  - settings.json をタブで編集 → 保存(`save_file` Rust command = `fs::write` 直書き)→ ディスク更新
+  - 一方 Tauri Store(`tauri-plugin-store` v2)は memory に古いキャッシュを保持
+  - その後 `saveWorkspace` 等が呼ばれると memory(古い)→ ディスクで上書き → 直書きの内容が失われる
+  - 修正:`saveWorkspace` の冒頭で `store.reload()` + 既存 workspace 値とマージしてから `set` する。これでユーザの直編集が消えない
+- **既知の制約**:`tauri-plugin-store` v2 は `store.save()` 時に JSON のキーをアルファベット順にソートして書き出す。Yuhitsu のタブで末尾に書き加えても、次回 saveWorkspace 呼び出しで再フォーマットされる。Phase 2 の設定 UI ができれば直編集は不要になるので受容(自前 fs::write に置き換える方法もあるが他 save 関数まで波及するため見送り)
 
 ### 2026-05-02: 起動時の preview 接続失敗(孤児 tinymist 起因)を修正
 - **症状**(氏報告):起動時に「Failed to start preview. failed to connect preview control plane after 5000 ms」(初回は Connection reset、2 回目は Connection refused)

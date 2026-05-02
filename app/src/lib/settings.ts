@@ -53,6 +53,15 @@ export type ToolbarSettings = {
 /** キーバインドの override。空 / 未指定なら commands.ts の defaultKey を使う */
 export type KeybindingsSettings = Partial<Record<CommandId, string>>;
 
+/** ステータスバーの「文字数」表示モード:
+ *   "non-whitespace": 空白(改行・スペース・タブ・全角スペース等)を除く字数。
+ *                     原稿の字数感覚に近い。Yuhitsu の標準
+ *   "all": doc 全長(VSCode 流儀、空白も含む) */
+export type CharCountMode = "non-whitespace" | "all";
+export function isCharCountMode(v: unknown): v is CharCountMode {
+  return v === "non-whitespace" || v === "all";
+}
+
 export type WorkspaceSettings = {
   /** プレビューペインを表示するか */
   previewVisible: boolean;
@@ -67,6 +76,8 @@ export type WorkspaceSettings = {
   /** ステータスバー(画面下部、行数/文字数/ワードカウント等を表示)を表示するか。
       標準は off。行数等の実装は Phase 2 以降で追加する仕込みだけ用意してある */
   statusbarVisible: boolean;
+  /** ステータスバーに出す文字数のカウント方式 */
+  charCountMode: CharCountMode;
 };
 
 export type Settings = {
@@ -109,6 +120,7 @@ const DEFAULT_SETTINGS: Settings = {
     projectPaneRatio: 0.18,
     currentFolder: null,
     statusbarVisible: false,
+    charCountMode: "non-whitespace",
   },
   ai: {},
 };
@@ -255,6 +267,9 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
       typeof obj.statusbarVisible === "boolean"
         ? obj.statusbarVisible
         : def.statusbarVisible,
+    charCountMode: isCharCountMode(obj.charCountMode)
+      ? obj.charCountMode
+      : def.charCountMode,
   };
 }
 
@@ -371,13 +386,28 @@ export async function saveKeybindings(
 }
 
 export async function saveWorkspace(workspace: WorkspaceSettings): Promise<void> {
+  // Yuhitsu のタブから fs::write で直書きされた settings.json を上書き
+  // しないよう、書き込み前に reload して最新を memory に取り込み、既存
+  // フィールドとマージする。万一 Yuhitsu が知らないキーがあっても保つ。
+  try {
+    await store.reload();
+  } catch {
+    // 初回など、まだファイルが無い時は無視
+  }
+  const existing =
+    ((await store.get<Record<string, unknown>>("workspace")) ?? {}) as Record<
+      string,
+      unknown
+    >;
   await store.set("workspace", {
+    ...existing,
     previewVisible: workspace.previewVisible,
     editorPaneRatio: clamp(workspace.editorPaneRatio, 0.1, 0.9),
     projectViewVisible: workspace.projectViewVisible,
     projectPaneRatio: clamp(workspace.projectPaneRatio, 0.1, 0.5),
     currentFolder: workspace.currentFolder,
     statusbarVisible: workspace.statusbarVisible,
+    charCountMode: workspace.charCountMode,
   });
   await store.save();
 }
