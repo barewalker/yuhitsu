@@ -34,7 +34,8 @@
     "toggleSidebarMode": "Switch sidebar layout (split / tabs)",
     "openSettings": "Open settings file",
     "openKeybindings": "Keybindings",
-    "openToolbarEdit": "Edit toolbar"
+    "openToolbarEdit": "Edit toolbar",
+    "openCommandPalette": "Command palette"
   },
   "tab": {
     "untitled": "(Untitled)"
@@ -140,6 +141,11 @@
   "sidebar": {
     "tabProject": "Project",
     "tabForm": "Form"
+  },
+  "commandPalette": {
+    "ariaLabel": "Command palette",
+    "placeholder": "Search commands…",
+    "empty": "No matching commands"
   },
   "form": {
     "title": "Form",

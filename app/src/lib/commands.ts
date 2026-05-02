@@ -12,6 +12,7 @@ import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Keyboard from "@lucide/svelte/icons/keyboard";
 import LayoutGrid from "@lucide/svelte/icons/layout-grid";
 import LayoutPanelLeft from "@lucide/svelte/icons/layout-panel-left";
+import Command from "@lucide/svelte/icons/command";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -84,6 +85,7 @@ export const COMMAND_IDS = [
   "open-settings",
   "open-keybindings",
   "open-toolbar-edit",
+  "open-command-palette",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -120,6 +122,7 @@ export interface CommandContext {
   openSettings: () => void | Promise<void>;
   openKeybindings: () => void | Promise<void>;
   openToolbarEdit: () => void | Promise<void>;
+  openCommandPalette: () => void | Promise<void>;
 }
 
 export interface CommandDef {
@@ -366,7 +369,10 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     id: "toggle-preview",
     labelKey: "command.togglePreview",
     icon: PanelRight,
-    defaultKey: "Mod-Shift-p",
+    // 元は Ctrl+Shift+P だったが、コマンドパレットを VSCode 慣習に
+    // 合わせるため明け渡し、Ctrl+Alt+P に移動。慣れているユーザは
+    // キーバインド設定 UI で元の Mod-Shift-p に戻せる。
+    defaultKey: "Mod-Alt-p",
     needsEditor: false,
     run: (ctx) => ctx.togglePreview(),
   },
@@ -402,6 +408,17 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     icon: LayoutGrid,
     needsEditor: false,
     run: (ctx) => ctx.openToolbarEdit(),
+  },
+  "open-command-palette": {
+    id: "open-command-palette",
+    labelKey: "command.openCommandPalette",
+    icon: Command,
+    // VSCode 慣習に合わせて Ctrl+Shift+P を主軸、F1 も副キーで併設。
+    // F1 単独だと GNOME 等の OS が Help shortcut として消費するケースが
+    // ある(指で押しても届かない)ので、Ctrl+Shift+P を default の最初に。
+    defaultKey: ["Mod-Shift-p", "F1"],
+    needsEditor: false,
+    run: (ctx) => ctx.openCommandPalette(),
   },
 };
 

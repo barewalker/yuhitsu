@@ -40,6 +40,7 @@
   import TemplateDialog from "$lib/TemplateDialog.svelte";
   import KeybindingsDialog from "$lib/KeybindingsDialog.svelte";
   import ToolbarEditDialog from "$lib/ToolbarEditDialog.svelte";
+  import CommandPalette from "$lib/CommandPalette.svelte";
   import FormPanel from "$lib/FormPanel.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
@@ -98,6 +99,7 @@
   let templateDialogOpen = $state(false);
   let keybindingsDialogOpen = $state(false);
   let toolbarEditDialogOpen = $state(false);
+  let commandPaletteOpen = $state(false);
   // settings.json の絶対パス。起動時に Rust から取得して保持し、
   // save() でこのパスに書いたら自動で reloadSettings を呼ぶための比較用。
   let settingsPath = $state<string | null>(null);
@@ -1062,6 +1064,7 @@
       openSettings,
       openKeybindings,
       openToolbarEdit,
+      openCommandPalette,
     };
   }
 
@@ -1703,6 +1706,14 @@
   function openToolbarEdit() {
     toolbarEditDialogOpen = true;
   }
+
+  function openCommandPalette() {
+    commandPaletteOpen = true;
+  }
+  function onCommandPaletteSelect(id: CommandId) {
+    commandPaletteOpen = false;
+    runCommand(id);
+  }
   async function applyToolbarUpdate(next: ToolbarItem[]) {
     toolbarItems = next;
     try {
@@ -1765,8 +1776,13 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    // 修飾キーを伴わないキー入力はエディタ本体に渡す(IME / vim 等)
-    if (!e.ctrlKey && !e.metaKey && !e.altKey) return;
+    // 修飾キーを伴わないキー入力は基本エディタ本体に渡す(IME / vim 等)。
+    // ただし F1-F24 のような function キー単独は通常テキスト入力に使われ
+    // ないため、コマンドカタログ側のキーバインド(例: open-command-palette
+    // = F1)を発動させる経路は確保する。
+    const noMod = !e.ctrlKey && !e.metaKey && !e.altKey;
+    const isFunctionKey = /^F\d{1,2}$/.test(e.key);
+    if (noMod && !isFunctionKey) return;
     for (const id of COMMAND_IDS) {
       const keys = effectiveKeys(id);
       if (keys.length === 0) continue;
@@ -2260,6 +2276,15 @@
       items={toolbarItems}
       onUpdate={applyToolbarUpdate}
       onClose={() => (toolbarEditDialogOpen = false)}
+    />
+  {/if}
+
+  {#if commandPaletteOpen}
+    <CommandPalette
+      {keybindings}
+      editorAvailable={editorView !== null}
+      onSelect={onCommandPaletteSelect}
+      onClose={() => (commandPaletteOpen = false)}
     />
   {/if}
 

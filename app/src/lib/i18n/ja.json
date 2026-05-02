@@ -34,7 +34,8 @@
     "toggleSidebarMode": "サイドバーレイアウト切替(分割 / タブ)",
     "openSettings": "設定ファイルを開く",
     "openKeybindings": "キーバインド設定",
-    "openToolbarEdit": "ツールバー編集"
+    "openToolbarEdit": "ツールバー編集",
+    "openCommandPalette": "コマンドパレット"
   },
   "tab": {
     "untitled": "(無題)"
@@ -140,6 +141,46 @@
   "sidebar": {
     "tabProject": "プロジェクト",
     "tabForm": "フォーム"
+  },
+  "commandPalette": {
+    "ariaLabel": "コマンドパレット",
+    "placeholder": "コマンドを検索…",
+    "empty": "該当するコマンドがありません"
+  },
+  "commandAlias": {
+    "newTab": "あたらしいたぶ atarashii shintab しんきたぶ",
+    "newFromTemplate": "てんぷれーとからしんき tenpureeto shinki sakusei template",
+    "open": "ひらく hiraku open",
+    "openFolder": "ふぉるだをひらく folder hiraku",
+    "save": "ほぞん hozon save",
+    "saveAs": "なまえをつけてほぞん namaeotsukete saveas",
+    "closeTab": "たぶをとじる tojiru tab close",
+    "nextTab": "つぎのたぶ tsuginotab next",
+    "prevTab": "まえのたぶ maenotab previous prev",
+    "exportPdf": "ぴーでぃーえふしゅつりょく pdf shutsuryoku export",
+    "bold": "ふとじ futoji bold",
+    "italic": "しゃたい shatai italic",
+    "heading1": "みだし1 midashi1 h1 heading",
+    "heading2": "みだし2 midashi2 h2 heading",
+    "heading3": "みだし3 midashi3 h3 heading",
+    "bulletList": "かじょうがき kajougaki list bullet",
+    "numberedList": "ばんごうつき bangoutsuki numbered ordered",
+    "math": "すうしき suushiki math",
+    "codeInline": "こーどいんらいん code inline",
+    "codeBlock": "こーどぶろっく codeblock",
+    "link": "りんく rinku link",
+    "footnote": "きゃくちゅう kyakuchuu footnote",
+    "quote": "いんよう inyou quote",
+    "image": "がぞう gazou image",
+    "table": "ひょう hyou table",
+    "bibliography": "さんこうぶんけん sankoubunken bibliography reference",
+    "toggleProjectView": "ぷろじぇくとびゅー projectview sidebar",
+    "togglePreview": "ぷれびゅー preview",
+    "toggleSidebarMode": "さいどばーきりかえ sidebar mode",
+    "openSettings": "せってい settei settings config",
+    "openKeybindings": "きーばいんど keybind shortcut",
+    "openToolbarEdit": "つーるばーへんしゅう toolbar edit",
+    "openCommandPalette": "こまんどぱれっと commandpalette palette"
   },
   "form": {
     "title": "フォーム",

@@ -57,3 +57,26 @@ export function t(
   const value = primary ?? lookup(DICTIONARIES.en, key) ?? key;
   return params ? interpolate(value, params) : value;
 }
+
+/**
+ * 強制的に英語辞書から引く。表示は日本語のまま、検索のみ英語ラベルで
+ * 引きたいケース(コマンドパレットでローマ字英単語で日本語コマンドを
+ * 検索可能にする等)で使う。
+ */
+export function tEn(
+  key: string,
+  params?: Record<string, string | number>,
+): string {
+  const value = lookup(DICTIONARIES.en, key) ?? key;
+  return params ? interpolate(value, params) : value;
+}
+
+/**
+ * 検索エイリアス専用の lookup。現在 locale だけを引き、未定義なら空文字。
+ * 漢字変換前のかなや訓令式ローマ字を入れた `commandAlias.*` を引く時に使う。
+ * `t()` のように key 文字列を返さないので、検索ノイズにならない。
+ */
+export function tAlias(key: string): string {
+  const value = lookup(DICTIONARIES[i18nState.locale], key);
+  return typeof value === "string" ? value : "";
+}
