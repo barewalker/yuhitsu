@@ -8,5 +8,38 @@
   "description": {
     "ja": "会議の日時・参加者・議題・決定事項・宿題を整理する雛形。",
     "en": "Capture meeting date, attendees, agenda, decisions, and action items."
+  },
+  "form": {
+    "function": "meeting-minutes",
+    "fields": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": { "ja": "タイトル", "en": "Title" }
+      },
+      {
+        "name": "location",
+        "type": "string",
+        "label": { "ja": "場所", "en": "Location" },
+        "placeholder": {
+          "ja": "本社 3F 会議室 / Zoom",
+          "en": "Office room A / Zoom"
+        }
+      },
+      {
+        "name": "attendees",
+        "type": "string",
+        "label": { "ja": "出席者", "en": "Attendees" },
+        "placeholder": {
+          "ja": "山田、佐藤、田中",
+          "en": "Alice, Bob, Charlie"
+        }
+      },
+      {
+        "name": "recorder",
+        "type": "string",
+        "label": { "ja": "議事録作成", "en": "Recorder" }
+      }
+    ]
   }
 }

@@ -40,9 +40,15 @@
   import TemplateDialog from "$lib/TemplateDialog.svelte";
   import KeybindingsDialog from "$lib/KeybindingsDialog.svelte";
   import ToolbarEditDialog from "$lib/ToolbarEditDialog.svelte";
+  import FormPanel from "$lib/FormPanel.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
   import { listTemplates, resolveTemplate } from "$lib/templates";
+  import {
+    findWithCall,
+    rebuildWithCall,
+    type ArgKind,
+  } from "$lib/template-args";
   import {
     COMMANDS,
     COMMAND_IDS,
@@ -112,9 +118,14 @@
   let projectPaneRatio = $state(0.18);
   let statusbarVisible = $state(false);
   let charCountMode = $state<"non-whitespace" | "all">("non-whitespace");
+  // 左サイドバーのレイアウト(α: split / γ: tabs)。settings から復元する。
+  let sidebarMode = $state<"split" | "tabs">("split");
+  let sidebarSplitRatio = $state(0.55);
+  let sidebarActiveTab = $state<"project" | "form">("project");
   let workspaceEl = $state<HTMLDivElement | null>(null);
   let editPreviewEl = $state<HTMLDivElement | null>(null);
-  let splitterTarget = $state<"project" | "editor" | null>(null);
+  let projectPaneEl = $state<HTMLElement | null>(null);
+  let splitterTarget = $state<"project" | "editor" | "sidebar" | null>(null);
 
   // プロジェクト状態。currentFolder は永続化、projectTree は起動時に
   // 読み込む。expanded はセッション内のみ(リロードで初期化)。
@@ -290,6 +301,9 @@
       keybindings = settings.keybindings;
       statusbarVisible = settings.workspace.statusbarVisible;
       charCountMode = settings.workspace.charCountMode;
+      sidebarMode = settings.workspace.sidebarMode;
+      sidebarSplitRatio = settings.workspace.sidebarSplitRatio;
+      sidebarActiveTab = settings.workspace.sidebarActiveTab;
       // JSON エラー表示が残っていた時だけクリア(他の error メッセージは
       // 触らない)
       if (settingsErrorActive) {
@@ -782,6 +796,36 @@
     editorView = view;
   }
 
+  // FormPanel から呼ばれる書き戻し。doc を最新の状態で再パースしてから差し替え、
+  // editorView 経由で transaction を打つ(undo 可能、updateListener も走る)。
+  function onFormApply(name: string, value: ArgKind) {
+    if (!editorView) return;
+    const doc = editorView.state.doc.toString();
+    const call = findWithCall(doc);
+    if (!call) return;
+    const idx = call.args.findIndex((a) => a.name === name);
+    const nextArgs =
+      idx >= 0
+        ? call.args.map((a, i) => (i === idx ? { name, value } : a))
+        : [...call.args, { name, value }];
+    const change = rebuildWithCall(doc, call, nextArgs);
+    editorView.dispatch({ changes: change });
+  }
+
+  // 同梱テンプレからの form spec 解決。`#show: <fn>.with(...)` の関数名と
+  // 一致するテンプレを探す。一致する同梱テンプレが無ければ汎用フォールバック
+  // (FormPanel 側で call.args そのままから入力欄を生成)。
+  let activeFormSpec = $derived(resolveFormSpec(content));
+
+  function resolveFormSpec(doc: string) {
+    const call = findWithCall(doc);
+    if (!call) return null;
+    for (const tpl of allTemplates) {
+      if (tpl.form && tpl.form.function === call.fn) return tpl.form;
+    }
+    return null;
+  }
+
   function onEditorTeardown() {
     editorView = null;
   }
@@ -1034,9 +1078,14 @@
     markFirstRunDone();
   }
 
-  // テンプレを選んだ時:active タブが空タブ(path 無し・未編集)なら content だけ
-  // 差し替え、そうでなければ新規タブを作って差し替える。Typst でない初期状態の
-  // タブは preview/LSP が止まっているので、必要なら起動。
+  // テンプレを選んだ時:active タブが「実質空」なら content だけ差し替え、そう
+  // でなければ新規タブを作って差し替える。
+  // 「実質空」の条件:
+  //   - 無題かつ未編集(従来通り)、または
+  //   - 中身が空 or 空白のみ(path 有無を問わない。ディスクに既にある空 .typ
+  //     にテンプレを当てたいケースをカバー、保存するまでディスクは変わらない)
+  // 差替え後は dirty=true を立てるので、Ctrl+Z で元の空状態に戻せるし、
+  // 望まなければ保存しなければよい。
   async function onTemplateSelect(id: string) {
     const tpl = resolveTemplate(id, resolvedLocale, paperSize);
     if (!tpl) {
@@ -1047,8 +1096,11 @@
     }
     captureActiveTabState();
     const current = getActiveTab();
-    const reuseEmpty =
+    const isUntitledClean =
       current !== null && current.path === null && !current.dirty;
+    const isEffectivelyEmpty =
+      current !== null && current.content.trim() === "";
+    const reuseEmpty = isUntitledClean || isEffectivelyEmpty;
     if (reuseEmpty && current) {
       current.content = tpl.body;
       current.dirty = true;
@@ -1056,7 +1108,8 @@
       current.cursorHead = 0;
       current.scrollTop = 0;
       current.editorState = null;
-      // virtualPath は流用可(無題のままなので preview 経路は同じ)
+      // virtualPath は流用可(無題のままなら preview 経路は同じ。path 有り
+      // タブには元々 virtualPath なし)
     } else {
       const tab: Tab = {
         id: newTabId(),
@@ -1084,6 +1137,10 @@
         await Promise.all([startPreview(target), ensureLspFor(target)]);
       }
     }
+    // テンプレ本文の差替直後は onEditorChange の dirty=true ガード(tab.content
+    // === next)で no-op になり memory update が走らない。未保存でも preview に
+    // 反映されるよう、ここで明示的に注入する。
+    schedulePreviewMemoryUpdate();
   }
 
   function togglePreview() {
@@ -1093,9 +1150,14 @@
 
   function toggleProjectView() {
     projectViewVisible = !projectViewVisible;
-    // 開かれたタイミングでフォルダ未選択なら自動で Open Folder ダイアログ
+    // 開かれたタイミングでフォルダ未選択なら自動で Open Folder ダイアログ。
+    // ただし tabs モードで form タブを表示中なら、ユーザはフォーム目的で
+    // 開いただけかもしれないので Open Folder は呼ばない(Project タブを
+    // クリックした時に必要なら別途呼ぶ)。
     if (projectViewVisible && !currentFolder) {
-      openFolder();
+      const formTabActive =
+        sidebarMode === "tabs" && sidebarActiveTab === "form";
+      if (!formTabActive) openFolder();
     }
     persistWorkspace();
   }
@@ -1109,6 +1171,9 @@
       currentFolder,
       statusbarVisible,
       charCountMode,
+      sidebarMode,
+      sidebarSplitRatio,
+      sidebarActiveTab,
     }).catch((e) => {
       // 永続化失敗はログのみ(ボタン操作はそのまま受け付ける)
       console.warn("workspace save failed:", e);
@@ -1120,8 +1185,12 @@
   }
 
   // スプリッタを掴んだら pointer capture して move/up を listen する。
-  // 左:プロジェクトビューと右側全体の境界。右:エディタとプレビューの境界。
-  function onSplitterDown(e: PointerEvent, which: "project" | "editor") {
+  // 左:プロジェクトビューと右側全体の境界。中(sidebar):プロジェクトと
+  // フォームの境界(α split モード時のみ)。右:エディタとプレビューの境界。
+  function onSplitterDown(
+    e: PointerEvent,
+    which: "project" | "editor" | "sidebar",
+  ) {
     if (!workspaceEl) return;
     splitterTarget = which;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -1140,6 +1209,13 @@
       const rect = editPreviewEl.getBoundingClientRect();
       const ratio = (e.clientX - rect.left) / rect.width;
       editorPaneRatio = clampRatio(ratio, 0.1, 0.9);
+    } else if (splitterTarget === "sidebar") {
+      // sidebar splitter は α split モード時の「サイドバー縦の比率」。
+      // 上:プロジェクト / 下:フォーム の高さ比。
+      if (!projectPaneEl) return;
+      const rect = projectPaneEl.getBoundingClientRect();
+      const ratio = (e.clientY - rect.top) / rect.height;
+      sidebarSplitRatio = clampRatio(ratio, 0.1, 0.9);
     }
   }
 
@@ -1745,6 +1821,9 @@
         currentFolder = settings.workspace.currentFolder;
         statusbarVisible = settings.workspace.statusbarVisible;
         charCountMode = settings.workspace.charCountMode;
+        sidebarMode = settings.workspace.sidebarMode;
+        sidebarSplitRatio = settings.workspace.sidebarSplitRatio;
+        sidebarActiveTab = settings.workspace.sidebarActiveTab;
         // settings.json の絶対パスを起動時に取っておく。これがないと、
         // ユーザが「設定を開く」コマンドを通さず別経路(プロジェクトツリー
         // 等)で settings.json を Yuhitsu のタブに開いた場合、save() 内の
@@ -1861,61 +1940,126 @@
     {#if projectViewVisible}
       <aside
         class="project-pane"
+        class:tabs-mode={sidebarMode === "tabs"}
         style:flex={`0 0 ${projectPaneRatio * 100}%`}
+        bind:this={projectPaneEl}
       >
-        <div class="project-header">
-          {#if currentFolder}
-            <span class="folder-name" title={currentFolder}
-              >{basename(currentFolder)}</span
+        {#if sidebarMode === "tabs"}
+          <div class="sidebar-tabbar" role="tablist">
+            <button
+              class="sidebar-tab"
+              class:active={sidebarActiveTab === "project"}
+              role="tab"
+              aria-selected={sidebarActiveTab === "project"}
+              onclick={() => {
+                sidebarActiveTab = "project";
+                persistWorkspace();
+              }}>{t("sidebar.tabProject")}</button
             >
             <button
-              class="header-action"
-              title={t("command.openFolder")}
-              onclick={openFolder}>{t("project.change")}</button
+              class="sidebar-tab"
+              class:active={sidebarActiveTab === "form"}
+              role="tab"
+              aria-selected={sidebarActiveTab === "form"}
+              onclick={() => {
+                sidebarActiveTab = "form";
+                persistWorkspace();
+              }}>{t("sidebar.tabForm")}</button
             >
-            <button
-              class="header-action"
-              title={t("project.refreshTooltip")}
-              onclick={refreshProjectTree}>{t("project.refresh")}</button
-            >
-          {:else}
-            <span class="folder-name muted">{t("project.noFolder")}</span>
-            <button
-              class="header-action"
-              title={t("command.openFolder")}
-              onclick={openFolder}>{t("project.open")}</button
-            >
-          {/if}
-        </div>
-        <div
-          class="project-body"
-          oncontextmenu={(e) => {
-            // 既にツリー行で停止されていなければ、ルートフォルダ自身を
-            // ターゲットにメニューを出す(空白部分での右クリック対応)。
-            if (!projectTree) return;
-            e.preventDefault();
-            openTreeContextMenu(e, projectTree);
-          }}
-          role="presentation"
-        >
-          {#if projectTree && projectTree.children}
-            <ProjectTree
-              entries={projectTree.children}
-              activePath={path}
-              onOpenFile={selectFromTree}
-              expanded={projectExpanded}
-              onToggleExpanded={toggleProjectExpanded}
-              onContextMenu={openTreeContextMenu}
-              {gitStatus}
-            />
-          {:else if currentFolder}
-            <div class="placeholder">{t("placeholder.loading")}</div>
-          {:else}
-            <div class="placeholder">
-              {t("project.openHint")}
+          </div>
+        {/if}
+
+        {#if sidebarMode === "split" || sidebarActiveTab === "project"}
+          <div
+            class="sidebar-section project-section"
+            style:flex={sidebarMode === "split"
+              ? `0 0 calc(${sidebarSplitRatio * 100}% - 3px)`
+              : "1 1 0"}
+          >
+            <div class="project-header">
+              {#if currentFolder}
+                <span class="folder-name" title={currentFolder}
+                  >{basename(currentFolder)}</span
+                >
+                <button
+                  class="header-action"
+                  title={t("command.openFolder")}
+                  onclick={openFolder}>{t("project.change")}</button
+                >
+                <button
+                  class="header-action"
+                  title={t("project.refreshTooltip")}
+                  onclick={refreshProjectTree}>{t("project.refresh")}</button
+                >
+              {:else}
+                <span class="folder-name muted">{t("project.noFolder")}</span>
+                <button
+                  class="header-action"
+                  title={t("command.openFolder")}
+                  onclick={openFolder}>{t("project.open")}</button
+                >
+              {/if}
             </div>
-          {/if}
-        </div>
+            <div
+              class="project-body"
+              oncontextmenu={(e) => {
+                // 既にツリー行で停止されていなければ、ルートフォルダ自身を
+                // ターゲットにメニューを出す(空白部分での右クリック対応)。
+                if (!projectTree) return;
+                e.preventDefault();
+                openTreeContextMenu(e, projectTree);
+              }}
+              role="presentation"
+            >
+              {#if projectTree && projectTree.children}
+                <ProjectTree
+                  entries={projectTree.children}
+                  activePath={path}
+                  onOpenFile={selectFromTree}
+                  expanded={projectExpanded}
+                  onToggleExpanded={toggleProjectExpanded}
+                  onContextMenu={openTreeContextMenu}
+                  {gitStatus}
+                />
+              {:else if currentFolder}
+                <div class="placeholder">{t("placeholder.loading")}</div>
+              {:else}
+                <div class="placeholder">
+                  {t("project.openHint")}
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
+        {#if sidebarMode === "split"}
+          <div
+            class="splitter horizontal"
+            class:dragging={splitterTarget === "sidebar"}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={t("splitter.sidebarBoundary")}
+            onpointerdown={(e) => onSplitterDown(e, "sidebar")}
+            onpointermove={onSplitterMove}
+            onpointerup={onSplitterUp}
+            onpointercancel={onSplitterUp}
+          ></div>
+        {/if}
+
+        {#if sidebarMode === "split" || sidebarActiveTab === "form"}
+          <div
+            class="sidebar-section form-section"
+            style:flex="1 1 0"
+          >
+            <FormPanel
+              doc={getActiveTab() ? content : null}
+              isTypst={isTypstTab(getActiveTab())}
+              spec={activeFormSpec}
+              locale={resolvedLocale}
+              onApply={onFormApply}
+            />
+          </div>
+        {/if}
       </aside>
 
       <div
@@ -2181,6 +2325,7 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
   }
 
   /* プロジェクトビューの右クリックメニュー */
@@ -2541,6 +2686,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     background: var(--bg-elevated-1);
     border-right: 1px solid var(--bg-elevated-2);
   }
@@ -2599,12 +2745,60 @@
     transition: background 100ms ease;
   }
 
+  .splitter.horizontal {
+    /* α split モード時、サイドバー内のプロジェクト/フォーム境界 */
+    flex: 0 0 6px;
+    width: 100%;
+    align-self: auto;
+    cursor: row-resize;
+  }
+
   .splitter:hover {
     background: var(--border-strong);
   }
 
   .splitter.dragging {
     background: var(--accent);
+  }
+
+  .sidebar-tabbar {
+    display: flex;
+    align-items: stretch;
+    background: var(--bg-elevated-1);
+    border-bottom: 1px solid var(--bg-elevated-2);
+  }
+
+  .sidebar-tab {
+    flex: 1 1 0;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+
+  .sidebar-tab:hover {
+    background: var(--bg-elevated-2);
+  }
+
+  .sidebar-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* tabs モード時、表示中タブのセクションは縦いっぱい使う(0 basis で
+     auto による intrinsic 膨張を避ける) */
+  .project-pane.tabs-mode .sidebar-section {
+    flex: 1 1 0;
   }
 
   .preview-frame {
@@ -2617,6 +2811,7 @@
   .editor-pane :global(.cm-host) {
     flex: 1;
     min-height: 0;
+    height: 100%;
   }
 
   .placeholder {

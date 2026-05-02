@@ -4,18 +4,34 @@
 #set page(paper: "presentation-16-9", margin: 2cm)
 #set par(leading: 0.9em)
 
-// タイトルスライド
-#align(center + horizon)[
-  #text(size: 40pt, weight: "bold")[プレゼンテーションのタイトル]
-  #v(1em)
-  #text(size: 24pt)[サブタイトル]
-  #v(2em)
-  #text(size: 18pt)[発表者名]
-  #v(0.5em)
-  #text(size: 16pt)[#datetime.today().display()]
-]
+#let slides(
+  title: "プレゼンテーションのタイトル",
+  subtitle: "",
+  presenter: "",
+  body,
+) = {
+  align(center + horizon)[
+    #text(size: 40pt, weight: "bold")[#title]
+    #v(1em)
+    #if subtitle != "" [
+      #text(size: 24pt)[#subtitle]
+      #v(2em)
+    ]
+    #text(size: 18pt)[#presenter]
+    #v(0.5em)
+    #text(size: 16pt)[#datetime.today().display()]
+  ]
 
-#pagebreak()
+  pagebreak()
+
+  body
+}
+
+#show: slides.with(
+  title: "プレゼンテーションのタイトル",
+  subtitle: "サブタイトル",
+  presenter: "発表者名",
+)
 
 // 目次
 = 目次

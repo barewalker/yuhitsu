@@ -1,7 +1,7 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(ツールバー D&D 編集 UI 実装、Sprint 3 残はフォーム型テンプレ簡素版のみ)
-現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
+最終更新: 2026-05-02(フォーム型テンプレート簡素版 + サイドバー α/γ 両対応 + letter テンプレ廃止、Sprint 3 完了)
+現在のフェーズ: **Phase 1 — Sprint 3 完了。次は Phase 2(差別化機能の成熟化 + 内蔵 AI)に向けた整理**
 
 ---
 
@@ -241,7 +241,18 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - `svelte-dnd-action` ではなく pointer events で自前実装(WebKitGTK の HTML5 D&D 既知不具合を避ける、タブ並び替えと同じ流儀)
   - `parseToolbarItems` の migration で既存設定にも `open-toolbar-edit` を自動追加
 - [x] **キーバインド設定 UI**(2026-05-02)。`KeybindingsDialog.svelte` 新設、ツールバー右端から開く専用ダイアログ。各コマンドのキー欄をクリック → 押したキーを `Mod-Shift-x` 形式で `settings.keybindings` に保存(override 経路は既存)。「標準に戻す」で override 削除。衝突警告あり。`<input>` ではなく `<div tabindex="0">` でキャプチャして emacs 風 input bindings を回避(完全回避できない GTK Emacs テーマは OS 側設定の問題なので尊重して上書きしない方針)。matchKey は e.key と e.code 両方を試して keymap layout / GTK 変換に両対応
-- [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
+- [x] **フォーム型テンプレート簡素版**(2026-05-02)。差別化ポイント #2 の最初の実装。詳細:
+  - `$lib/template-args.ts` 新設:`#show: <fn>.with(...)` を行ベース簡易パーサで読み・書き戻し(string / number / boolean に対応、それ以外は raw として表示のみ)。コメント・文字列リテラル・括弧ネスト対応の最小実装
+  - `$lib/FormPanel.svelte` 新設:active タブの doc を $derived で監視、見つけた call site の引数キーをラベル付き input / textarea / number / checkbox で描画。focus 中は draft、blur で書き戻し(打鍵ごとに undo 履歴を肥大化させない)
+  - 同梱テンプレ向けの `meta.json` スキーマ拡張:`form: { function, fields: [{name, type, label.{ja,en}, placeholder?}] }` を追加。同梱外の自作ドキュメント(`#show: ~.with(...)` を持つ任意の Typst 文書)も汎用フォールバックでフォーム化される(P1 + P3 構成)
+  - 業務報告書テンプレを `#let business-report(title, author, affiliation, period, body) = {...}` + `#show: business-report.with(...)` 形式に書き換え
+  - **残りの同梱テンプレも関数化(2026-05-02 同日対応)**:
+    - `technical-report` — title / author / affiliation / abstract(textarea)。abstract が空なら概要ボックス自体を出さない条件分岐 `#if abstract != "" [...]`
+    - `meeting-minutes` — title / location / attendees / recorder
+    - `slides` — title / subtitle / presenter。subtitle が空ならその行と直後の `v(2em)` を出さない
+    - `empty` は本文がほぼ無い設定だけのテンプレなので関数化対象外(form 未定義のまま)
+  - サイドバーを **α split / γ tabs の両モード対応**:`workspace.sidebarMode` で切替、`split` は上半分プロジェクト・下半分フォーム(間に horizontal スプリッタ、`sidebarSplitRatio` で永続化)、`tabs` はサイドバー上部に「Project」「Form」タブヘッダ + 排他表示(`sidebarActiveTab` で永続化)
+  - `letter` テンプレを廃止(氏判断「現代では不要」)。`templates/letter/` 削除、`ORDER` から除外
 - [x] **設定読み込みエラーの可視化**(2026-05-02)。Rust の `validate_settings_json` で `serde_json` パースして「行 X 列 Y: …」を返し、ステータスバーに表示。修正後 reload 成功で自動クリア(専用フラグ `settingsErrorActive` で他の error メッセージとは独立に管理)
 
 ### 配布
@@ -562,6 +573,35 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - 副次:`save / saveAs` を `Promise<boolean>` 化(2026-05-01)した時の取りこぼしで `CommandContext` の型が `Promise<void>` のままだった件を修正(`Promise<unknown>` に緩和)
 - 残:無題タブ(path 無し)はまだ対象外。仮想パス(例 `__yuhitsu_unsaved_<tabId>__.typ`)を割り当てて memory file 化すれば対応可だが、preview の subprocess 起動引数に実在ファイルが要る制約があり別タスク
 - 動作確認:**氏に GUI で確認してもらう必要あり**。型チェック(`pnpm check`)・Rust ビルド(`cargo check`)は通過
+
+### 2026-05-02: 全体スクロール bug 修正(エディタ高さ伝達の落とし穴)
+- **症状**(氏報告):業務報告書テンプレを当てると、エディタがステータスバーを突き破り、ツールバー / 両サイド / ステータスバー含めて Yuhitsu 全体が縦スクロールしてしまう。プロジェクトビュー非表示でも同じ
+- **真因**:`+page.svelte` の `.editor-pane :global(.cm-host) { flex: 1; min-height: 0; }` が、Editor.svelte 内の `.cm-host { height: 100%; }` を **CSS specificity で上書き** し、`height: 100%` が消えていた。これは元々の落とし穴で、エディタ本文が短い間は CodeMirror が contentHeight 駆動で表示するだけで露呈しなかった。今回業務報告書を `#let business-report(...) = {...}` 形式に書き換えて本文を長くしたら、cm-editor が内容ベースで膨張 → .editor-pane → .edit-preview-row → .workspace が連鎖的に伸び、`.app { height: 100vh }` だけでは body スクロールを封じられず全体スクロール発生
+- **対策(三層)**:
+  - `.editor-pane :global(.cm-host)` に `height: 100%` を明示(specificity 競合に勝つ)
+  - Editor.svelte の `EditorView.theme` で `"&"` (= cm-editor 自身)に `height: "100%"` を追加(JS 側からも保証)
+  - `.app` に `overflow: hidden` を追加(子要素が万一伸びても body スクロールは絶対に出さない最終防壁)
+- 副次:`flex: 1 1 auto` の auto basis は内容ベースで膨らむので、`.sidebar-section` の form 側を `flex: 1 1 0` に変えた(残りスペース配分のみで内容膨張に巻き込まれない)
+- 学び:Svelte の scoped style と `:global(...)` の specificity は同じになる(両方とも class hash が付くため)。global で flex 指定する時は `height` 等の関連プロパティもセットで書かないと、上位コンポーネントの指定を意図せず潰す
+
+### 2026-05-02: フォーム型テンプレート簡素版(Sprint 3 完了)
+- **氏判断**:
+  - パース対象は **C 案**(`meta.json` の `form.fields` で同梱テンプレに型・ラベル・並びを持たせる)
+  - 配置は **左サイドバー下半分**を基本。さらに **α (split) と γ (tabs) の両対応**を採用、ユーザが切替できるようにする(`workspace.sidebarMode`)
+  - 書き換え粒度は **P1 + P3**:同梱は「業務報告書」だけ最初に書き換え、残りは段階対応。**ユーザ自作の `#show: ~.with(...)` を持つドキュメント**にも汎用フォールバックでフォーム化が効く(差別化が一段強くなる)
+  - **letter テンプレは廃止**(氏判断「現代では不要」)
+- 実装:
+  - `$lib/template-args.ts`:`#show: <fn>.with(...)` を行ベースで読み・書き戻し。string / number / boolean をフォーム対応、`datetime(...)` 等の関数呼び出し・配列・コードブロックは raw として読み取り専用表示。文字列の `\n` `\t` `\\` `\"` エスケープを read/write 両対応
+  - `$lib/FormPanel.svelte`:doc を $derived で監視、call site が見つかれば spec(同梱の場合)または call.args(汎用フォールバック)から入力欄を生成。focus 中は draft、blur で onApply(打鍵ごとに undo 履歴を肥大化させないため)、boolean は即時反映
+  - 業務報告書テンプレを `#let business-report(...) = { ... body }` + `#show: business-report.with(...)` 形式に書き換え。`meta.json` の `form.fields` で title / author / affiliation / period の 4 フィールド + ja/en ラベル翻訳を定義
+  - サイドバー HTML を改修:`projectPaneEl` を bind し縦の splitter(`splitter horizontal`、cursor: row-resize)を追加。tabs モードは sidebar-tabbar(タブヘッダ)を上部に表示し、選択タブのセクションだけ flex: 1 で占有
+  - `workspace.sidebarMode` / `workspace.sidebarSplitRatio` / `workspace.sidebarActiveTab` を `settings.ts` に追加、デフォルト `"split"` / `0.55` / `"project"`、parser / saveWorkspace / migration 対応済み
+  - `toggleProjectView` が「tabs モード × form タブ」のときは Open Folder ダイアログを呼ばないように分岐(フォーム目的で開いた時の不要な確認をスキップ)
+  - i18n 辞書に `sidebar.tabProject` / `sidebar.tabForm` / `splitter.sidebarBoundary` / `form.*` の 9 キー追加
+- 残:
+  - サイドバーモード切替の **GUI 経路**(現状は `settings.json` 直編集 + focus 復帰で反映)。`toggle-sidebar-mode` コマンドをカタログに足し、ツールバー編集 UI から追加できるようにするのが筋(UI 文字最小化方針との両立で、デフォルトのツールバーには入れない)。氏に確認後実装
+  - 残りの同梱テンプレ(技術報告書 / 議事録 / スライド)を関数化 + form spec 付与(段階対応)
+- 動作確認:**氏に GUI で確認してもらう必要あり**。`pnpm check` / `pnpm build` / `cargo check` は通過
 
 ### 2026-05-02: Typst Universe 連携 UI は Phase 2 で扱う
 - **氏質問**:Typst Universe のパッケージやテンプレートは Yuhitsu で使える?

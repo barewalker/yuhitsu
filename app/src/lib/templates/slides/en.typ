@@ -4,18 +4,34 @@
 #set page(paper: "presentation-16-9", margin: 2cm)
 #set par(leading: 0.7em)
 
-// Title slide
-#align(center + horizon)[
-  #text(size: 40pt, weight: "bold")[Presentation Title]
-  #v(1em)
-  #text(size: 24pt)[Subtitle]
-  #v(2em)
-  #text(size: 18pt)[Presenter Name]
-  #v(0.5em)
-  #text(size: 16pt)[#datetime.today().display()]
-]
+#let slides(
+  title: "Presentation Title",
+  subtitle: "",
+  presenter: "",
+  body,
+) = {
+  align(center + horizon)[
+    #text(size: 40pt, weight: "bold")[#title]
+    #v(1em)
+    #if subtitle != "" [
+      #text(size: 24pt)[#subtitle]
+      #v(2em)
+    ]
+    #text(size: 18pt)[#presenter]
+    #v(0.5em)
+    #text(size: 16pt)[#datetime.today().display()]
+  ]
 
-#pagebreak()
+  pagebreak()
+
+  body
+}
+
+#show: slides.with(
+  title: "Presentation Title",
+  subtitle: "Subtitle",
+  presenter: "Presenter Name",
+)
 
 // Table of contents
 = Outline

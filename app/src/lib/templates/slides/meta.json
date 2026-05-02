@@ -8,5 +8,25 @@
   "description": {
     "ja": "16:9 横長ページのスライド雛形。素のページ分割版(touying 統合は将来予定)。",
     "en": "Plain 16:9 slide deck. Bare page-break version; touying integration planned later."
+  },
+  "form": {
+    "function": "slides",
+    "fields": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": { "ja": "タイトル", "en": "Title" }
+      },
+      {
+        "name": "subtitle",
+        "type": "string",
+        "label": { "ja": "サブタイトル", "en": "Subtitle" }
+      },
+      {
+        "name": "presenter",
+        "type": "string",
+        "label": { "ja": "発表者", "en": "Presenter" }
+      }
+    ]
   }
 }

@@ -62,6 +62,20 @@ export function isCharCountMode(v: unknown): v is CharCountMode {
   return v === "non-whitespace" || v === "all";
 }
 
+/** 左サイドバー(プロジェクト + フォーム)のレイアウトモード:
+ *   "split": 上半分プロジェクトツリー / 下半分フォームパネル(リサイズ可)
+ *   "tabs":  サイドバー全体をタブ切替式("Project" / "Form" を排他表示) */
+export type SidebarMode = "split" | "tabs";
+export function isSidebarMode(v: unknown): v is SidebarMode {
+  return v === "split" || v === "tabs";
+}
+
+/** tabs モードで現在表示中のタブ ID。 */
+export type SidebarTabId = "project" | "form";
+export function isSidebarTabId(v: unknown): v is SidebarTabId {
+  return v === "project" || v === "form";
+}
+
 export type WorkspaceSettings = {
   /** プレビューペインを表示するか */
   previewVisible: boolean;
@@ -78,6 +92,12 @@ export type WorkspaceSettings = {
   statusbarVisible: boolean;
   /** ステータスバーに出す文字数のカウント方式 */
   charCountMode: CharCountMode;
+  /** 左サイドバーの上下分割 / タブ切替 切替モード(α / γ) */
+  sidebarMode: SidebarMode;
+  /** split モード時、サイドバー高に対する「プロジェクト側(上)」の比率 0..1 */
+  sidebarSplitRatio: number;
+  /** tabs モード時の現在表示タブ */
+  sidebarActiveTab: SidebarTabId;
 };
 
 export type Settings = {
@@ -121,6 +141,9 @@ const DEFAULT_SETTINGS: Settings = {
     currentFolder: null,
     statusbarVisible: false,
     charCountMode: "non-whitespace",
+    sidebarMode: "split",
+    sidebarSplitRatio: 0.55,
+    sidebarActiveTab: "project",
   },
   ai: {},
 };
@@ -296,6 +319,17 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
     charCountMode: isCharCountMode(obj.charCountMode)
       ? obj.charCountMode
       : def.charCountMode,
+    sidebarMode: isSidebarMode(obj.sidebarMode)
+      ? obj.sidebarMode
+      : def.sidebarMode,
+    sidebarSplitRatio:
+      typeof obj.sidebarSplitRatio === "number" &&
+      Number.isFinite(obj.sidebarSplitRatio)
+        ? clamp(obj.sidebarSplitRatio, 0.1, 0.9)
+        : def.sidebarSplitRatio,
+    sidebarActiveTab: isSidebarTabId(obj.sidebarActiveTab)
+      ? obj.sidebarActiveTab
+      : def.sidebarActiveTab,
   };
 }
 
@@ -434,6 +468,9 @@ export async function saveWorkspace(workspace: WorkspaceSettings): Promise<void>
     currentFolder: workspace.currentFolder,
     statusbarVisible: workspace.statusbarVisible,
     charCountMode: workspace.charCountMode,
+    sidebarMode: workspace.sidebarMode,
+    sidebarSplitRatio: clamp(workspace.sidebarSplitRatio, 0.1, 0.9),
+    sidebarActiveTab: workspace.sidebarActiveTab,
   });
   await store.save();
 }

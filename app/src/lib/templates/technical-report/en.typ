@@ -5,24 +5,42 @@
 #show heading.where(level: 1): set text(size: 14pt)
 #show heading.where(level: 2): set text(size: 12pt)
 
-#align(center)[
-  #text(size: 18pt, weight: "bold")[Technical Report Title]
-  #v(0.5em)
-  Author Name / Affiliation
-  #v(0.3em)
-  #datetime.today().display()
-]
-
-#v(1em)
-
-#align(center)[
-  #box(width: 90%)[
-    #set par(first-line-indent: 0pt)
-    *Abstract* — Write a concise summary (around 200 words) covering background, objectives, methods, and key results.
+#let technical-report(
+  title: "Technical Report Title",
+  author: "",
+  affiliation: "",
+  abstract: "",
+  body,
+) = {
+  align(center)[
+    #text(size: 18pt, weight: "bold")[#title]
+    #v(0.5em)
+    #if affiliation != "" [#author / #affiliation] else [#author]
+    #v(0.3em)
+    #datetime.today().display()
   ]
-]
 
-#v(1em)
+  v(1em)
+
+  if abstract != "" {
+    align(center)[
+      #box(width: 90%)[
+        #set par(first-line-indent: 0pt)
+        *Abstract* — #abstract
+      ]
+    ]
+    v(1em)
+  }
+
+  body
+}
+
+#show: technical-report.with(
+  title: "Technical Report Title",
+  author: "",
+  affiliation: "",
+  abstract: "Write a concise summary (around 200 words) covering background, objectives, methods, and key results.",
+)
 
 = Introduction
 Background, prior work, and objectives.
@@ -48,5 +66,7 @@ Findings and future directions.
 // Bibliography supports Hayagriva YAML (.yml) and BibTeX (.bib).
 // Hayagriva is Typst-native with an intuitive structure (recommended).
 // BibTeX is the academic standard and reuses existing assets.
-#bibliography("references.yml")
+// Uncomment after creating the file (the "Insert bibliography" toolbar command
+// also picks a file via the dialog and inserts the line automatically).
+// #bibliography("references.yml")
 // #bibliography("references.bib")

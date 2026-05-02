@@ -3,20 +3,37 @@
 #set par(justify: true, leading: 0.65em)
 #set heading(numbering: "1.")
 
-#align(center)[
-  #text(size: 16pt, weight: "bold")[Business Report]
-]
+#let business-report(
+  title: "Business Report",
+  author: "",
+  affiliation: "",
+  period: "",
+  body,
+) = {
+  align(center)[
+    #text(size: 16pt, weight: "bold")[#title]
+  ]
 
-#v(1em)
+  v(1em)
 
-#table(
-  columns: (auto, 1fr),
-  stroke: 0.5pt,
-  inset: 6pt,
-  [Author], [],
-  [Department], [],
-  [Period], [#datetime.today().display("[year]/[month]/[day]") –],
-  [Date], [#datetime.today().display()],
+  table(
+    columns: (auto, 1fr),
+    stroke: 0.5pt,
+    inset: 6pt,
+    [Author], [#author],
+    [Department], [#affiliation],
+    [Period], [#period],
+    [Date], [#datetime.today().display()],
+  )
+
+  body
+}
+
+#show: business-report.with(
+  title: "Business Report",
+  author: "",
+  affiliation: "",
+  period: "",
 )
 
 = Activities

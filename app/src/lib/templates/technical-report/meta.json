@@ -8,5 +8,34 @@
   "description": {
     "ja": "概要 / はじめに / 方法 / 結果 / 考察 / 結論 / 参考文献 構成の論文寄り雛形。",
     "en": "Academic-style report with abstract, methods, results, discussion, and bibliography."
+  },
+  "form": {
+    "function": "technical-report",
+    "fields": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": { "ja": "タイトル", "en": "Title" }
+      },
+      {
+        "name": "author",
+        "type": "string",
+        "label": { "ja": "著者", "en": "Author" }
+      },
+      {
+        "name": "affiliation",
+        "type": "string",
+        "label": { "ja": "所属", "en": "Affiliation" }
+      },
+      {
+        "name": "abstract",
+        "type": "text",
+        "label": { "ja": "概要", "en": "Abstract" },
+        "placeholder": {
+          "ja": "200 字程度の要旨。研究背景・目的・手法・主要結果を簡潔に。",
+          "en": "Concise summary (~200 words) covering background, objectives, methods, and results."
+        }
+      }
+    ]
   }
 }

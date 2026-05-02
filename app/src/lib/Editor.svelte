@@ -208,6 +208,7 @@
         backgroundColor: "var(--bg-base)",
         color: "var(--text-primary)",
         fontSize: "14px",
+        height: "100%",
       },
       ".cm-scroller": {
         fontFamily:

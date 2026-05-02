@@ -60,7 +60,8 @@
   },
   "splitter": {
     "previewBoundary": "Editor / preview boundary",
-    "projectBoundary": "Project view / editor boundary"
+    "projectBoundary": "Project view / editor boundary",
+    "sidebarBoundary": "Project / form boundary"
   },
   "project": {
     "noFolder": "No folder selected",
@@ -134,5 +135,20 @@
     "lineCol": "Ln {line}, Col {col}",
     "chars": "{total} chars",
     "charsSelected": "{selected} / {total} chars"
+  },
+  "sidebar": {
+    "tabProject": "Project",
+    "tabForm": "Form"
+  },
+  "form": {
+    "title": "Form",
+    "noTab": "No document is being edited.",
+    "notTypst": "This tab is not a Typst document.",
+    "noWithCall": "This document has no #show: <name>.with(...) template call. Add a function definition and .with(...) to enable form editing.",
+    "noFields": "No editable arguments.",
+    "fnLabel": "Function",
+    "boolTrue": "Yes",
+    "boolFalse": "No",
+    "rawNotEditable": "This field cannot be edited from the form."
   }
 }

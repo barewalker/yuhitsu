@@ -60,7 +60,8 @@
   },
   "splitter": {
     "previewBoundary": "エディタとプレビューの境界",
-    "projectBoundary": "プロジェクトビューとエディタの境界"
+    "projectBoundary": "プロジェクトビューとエディタの境界",
+    "sidebarBoundary": "プロジェクトとフォームの境界"
   },
   "project": {
     "noFolder": "フォルダ未選択",
@@ -134,5 +135,20 @@
     "lineCol": "行 {line}, 列 {col}",
     "chars": "{total} 文字",
     "charsSelected": "{selected} / {total} 文字"
+  },
+  "sidebar": {
+    "tabProject": "プロジェクト",
+    "tabForm": "フォーム"
+  },
+  "form": {
+    "title": "フォーム",
+    "noTab": "編集中のドキュメントがありません。",
+    "notTypst": "このタブは Typst ドキュメントではありません。",
+    "noWithCall": "このドキュメントには #show: <name>.with(...) 形式のテンプレ呼び出しがありません。フォーム化するには関数定義 + .with(...) を追加してください。",
+    "noFields": "入力可能な引数がありません。",
+    "fnLabel": "関数",
+    "boolTrue": "はい",
+    "boolFalse": "いいえ",
+    "rawNotEditable": "このフィールドはフォームで編集できません。"
   }
 }

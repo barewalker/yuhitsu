@@ -11,12 +11,44 @@
 import type { Locale } from "$lib/i18n/locale";
 import type { PaperSize } from "$lib/settings";
 
+/**
+ * フォーム型テンプレート(差別化ポイント #2)用のフィールド定義。
+ *
+ * テンプレ本文に `#show: <function>.with(...)` 形式で関数化された雛形があり、
+ * その引数キーに対応するフォーム入力欄を FormPanel が描画する。
+ *
+ * fields が空 / 未定義のテンプレでも、本文中に `#show: <ident>.with(...)` が
+ * あれば FormPanel は汎用フォールバックでテキスト入力欄を生成する(P3)。
+ * fields の意味は「同梱テンプレ向けにラベル翻訳・型・並び順・default を上書きする」。
+ */
+export type FormFieldType = "string" | "text" | "number" | "boolean";
+
+export type FormField = {
+  /** Typst 関数の引数名(`title:` の `title`)。`-` も許容。 */
+  name: string;
+  type: FormFieldType;
+  label: Record<Locale, string>;
+  /** プレースホルダ表示。空 OK。 */
+  placeholder?: Record<Locale, string>;
+  /** デフォルト値(JSON 値、テンプレ本文の引数初期値とは独立)。書き戻し時は使わない。 */
+  default?: string | number | boolean;
+};
+
+/** 同梱テンプレが「フォーム化対応済み」であることを示すフォーム情報。 */
+export type FormSpec = {
+  /** テンプレ本文中の `#show: <function>.with(...)` の関数名。 */
+  function: string;
+  fields: FormField[];
+};
+
 export type TemplateMeta = {
   id: string;
   icon: string;
   category: string;
   title: Record<Locale, string>;
   description: Record<Locale, string>;
+  /** フォーム型対応のテンプレのみ持つ。未定義なら従来通り単純な雛形扱い。 */
+  form?: FormSpec;
 };
 
 export type Template = {
@@ -55,7 +87,6 @@ const ORDER: readonly string[] = [
   "business-report",
   "technical-report",
   "meeting-minutes",
-  "letter",
   "slides",
 ];
 

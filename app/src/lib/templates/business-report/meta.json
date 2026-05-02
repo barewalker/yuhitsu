@@ -8,5 +8,34 @@
   "description": {
     "ja": "日報・週報・月報の雛形。対象期間・実施内容・所感を埋めて使う。",
     "en": "Template for daily / weekly / monthly business reports."
+  },
+  "form": {
+    "function": "business-report",
+    "fields": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": { "ja": "件名", "en": "Title" }
+      },
+      {
+        "name": "author",
+        "type": "string",
+        "label": { "ja": "作成者", "en": "Author" }
+      },
+      {
+        "name": "affiliation",
+        "type": "string",
+        "label": { "ja": "所属", "en": "Department" }
+      },
+      {
+        "name": "period",
+        "type": "string",
+        "label": { "ja": "対象期間", "en": "Period" },
+        "placeholder": {
+          "ja": "2026/01/01 〜 2026/01/07",
+          "en": "2026/01/01 – 2026/01/07"
+        }
+      }
+    ]
   }
 }
