@@ -31,7 +31,8 @@
     "bibliography": "参考文献ファイルを挿入",
     "toggleProjectView": "プロジェクトビュー表示切替",
     "togglePreview": "プレビュー表示切替",
-    "openSettings": "設定ファイルを開く"
+    "openSettings": "設定ファイルを開く",
+    "openKeybindings": "キーバインド設定"
   },
   "tab": {
     "untitled": "(無題)"
@@ -104,6 +105,18 @@
   },
   "templateDialog": {
     "ariaLabel": "テンプレート選択"
+  },
+  "keybindings": {
+    "title": "キーバインド設定",
+    "ariaLabel": "キーバインド設定",
+    "command": "コマンド",
+    "binding": "キー",
+    "unset": "(未設定)",
+    "captureHint": "押したいキーを入力",
+    "reset": "標準に戻す",
+    "clear": "クリア",
+    "close": "閉じる",
+    "conflict": "「{label}」と衝突しています"
   },
   "statusbar": {
     "lineCol": "行 {line}, 列 {col}",

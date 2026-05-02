@@ -9,6 +9,7 @@ import Bold from "@lucide/svelte/icons/bold";
 import BookOpen from "@lucide/svelte/icons/book-open";
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
+import Keyboard from "@lucide/svelte/icons/keyboard";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -78,6 +79,7 @@ export const COMMAND_IDS = [
   "toggle-project-view",
   "toggle-preview",
   "open-settings",
+  "open-keybindings",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -111,6 +113,7 @@ export interface CommandContext {
   nextTab: () => void | Promise<void>;
   prevTab: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
+  openKeybindings: () => void | Promise<void>;
 }
 
 export interface CommandDef {
@@ -369,6 +372,15 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: false,
     run: (ctx) => ctx.openSettings(),
   },
+  "open-keybindings": {
+    id: "open-keybindings",
+    labelKey: "command.openKeybindings",
+    icon: Keyboard,
+    // ショートカットは default 無し(頻繁に開かない、ユーザが必要なら
+    // 設定 UI で自分で割り当てる)
+    needsEditor: false,
+    run: (ctx) => ctx.openKeybindings(),
+  },
 };
 
 // ツールバー上の項目。コマンド ID か区切り。
@@ -416,6 +428,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-keybindings",
       "open-settings",
     ],
   },
@@ -437,6 +450,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-keybindings",
       "open-settings",
     ],
   },
@@ -469,6 +483,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-keybindings",
       "open-settings",
     ],
   },

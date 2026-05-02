@@ -31,7 +31,8 @@
     "bibliography": "Insert bibliography file",
     "toggleProjectView": "Toggle project view",
     "togglePreview": "Toggle preview",
-    "openSettings": "Open settings file"
+    "openSettings": "Open settings file",
+    "openKeybindings": "Keybindings"
   },
   "tab": {
     "untitled": "(Untitled)"
@@ -104,6 +105,18 @@
   },
   "templateDialog": {
     "ariaLabel": "Template selection"
+  },
+  "keybindings": {
+    "title": "Keybindings",
+    "ariaLabel": "Keybindings",
+    "command": "Command",
+    "binding": "Key",
+    "unset": "(unset)",
+    "captureHint": "Press a key combination",
+    "reset": "Reset",
+    "clear": "Clear",
+    "close": "Close",
+    "conflict": "Conflicts with \"{label}\""
   },
   "statusbar": {
     "lineCol": "Ln {line}, Col {col}",

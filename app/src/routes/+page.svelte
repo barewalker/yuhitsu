@@ -22,6 +22,7 @@
     validateSettingsJson,
     saveFirstRunDone,
     saveWorkspace,
+    saveKeybindings,
   } from "$lib/settings";
   import type { LSPClient } from "@codemirror/lsp-client";
   import { pathToFileUri, startLspSession, type LspSession } from "$lib/lsp";
@@ -36,6 +37,7 @@
   import { listDirectory, loadGitStatus, type DirEntry } from "$lib/project";
   import ProjectTree from "$lib/ProjectTree.svelte";
   import TemplateDialog from "$lib/TemplateDialog.svelte";
+  import KeybindingsDialog from "$lib/KeybindingsDialog.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
   import { listTemplates, resolveTemplate } from "$lib/templates";
@@ -86,6 +88,7 @@
   let paperSize = $state<PaperSize>("auto");
   let firstRunDone = $state(true); // 起動時に loadSettings で本物の値に上書き
   let templateDialogOpen = $state(false);
+  let keybindingsDialogOpen = $state(false);
   // settings.json の絶対パス。起動時に Rust から取得して保持し、
   // save() でこのパスに書いたら自動で reloadSettings を呼ぶための比較用。
   let settingsPath = $state<string | null>(null);
@@ -1003,6 +1006,7 @@
       nextTab,
       prevTab,
       openSettings,
+      openKeybindings,
     };
   }
 
@@ -1470,15 +1474,28 @@
     return spec.replaceAll("Mod", "Ctrl").replaceAll("-", "+");
   }
 
+  // KeyboardEvent を物理キー名(e.code)に正規化する。GTK key theme が
+  // Emacs になっている環境では e.key が ArrowLeft 等に化けるため、物理
+  // キーを見るのが確実(KeyB → "b"、Digit1 → "1"、それ以外は素のまま)。
+  function normalizedKey(e: KeyboardEvent): string {
+    const code = e.code;
+    if (code.startsWith("Key")) return code.slice(3).toLowerCase();
+    if (code.startsWith("Digit")) return code.slice(5);
+    return code;
+  }
+
   // KeyboardEvent が "Mod-b" 形式の指定にマッチするかを判定。
-  // Mod は Ctrl/Cmd 両対応。最終キーは大文字小文字を無視。
+  // Mod は Ctrl/Cmd 両対応。最終キーは大文字小文字を無視。e.key と e.code
+  // 由来の正規化キー双方を試して、GTK 変換 / レイアウト両対応する。
   function matchKey(e: KeyboardEvent, spec: string): boolean {
     const parts = spec.split("-");
-    const last = parts[parts.length - 1];
+    const last = parts[parts.length - 1].toLowerCase();
     const wantMod = parts.includes("Mod");
     const wantShift = parts.includes("Shift");
     const wantAlt = parts.includes("Alt");
-    if (e.key.toLowerCase() !== last.toLowerCase()) return false;
+    const evKey = e.key.toLowerCase();
+    const evCode = normalizedKey(e).toLowerCase();
+    if (evKey !== last && evCode !== last) return false;
     const hasMod = e.ctrlKey || e.metaKey;
     if (wantMod !== hasMod) return false;
     if (wantShift !== e.shiftKey) return false;
@@ -1566,6 +1583,20 @@
       await openFileAtPath(path);
     } catch (e) {
       setStatus(String(e));
+    }
+  }
+
+  // キーバインド設定ダイアログを開く。中で更新があった時は onUpdate 経由で
+  // ここに伝わる(keybindings state を更新 + 永続化)。
+  function openKeybindings() {
+    keybindingsDialogOpen = true;
+  }
+  async function applyKeybindingsUpdate(next: Record<string, string>) {
+    keybindings = next;
+    try {
+      await saveKeybindings(next);
+    } catch (e) {
+      setStatus(t("status.settingsSaveFailed", { error: String(e) }));
     }
   }
 
@@ -2033,6 +2064,14 @@
       locale={resolvedLocale}
       onSelect={onTemplateSelect}
       onCancel={onTemplateCancel}
+    />
+  {/if}
+
+  {#if keybindingsDialogOpen}
+    <KeybindingsDialog
+      {keybindings}
+      onUpdate={applyKeybindingsUpdate}
+      onClose={() => (keybindingsDialogOpen = false)}
     />
   {/if}
 

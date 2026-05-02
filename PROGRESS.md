@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(設定読み込みエラー可視化 / タブ active 配色修正 / ステータスバー文字数 + 空白除外モード / 直編集と Tauri Store の衝突を防御)
+最終更新: 2026-05-02(キーバインド設定 UI を実装、Sprint 3 残はツールバー D&D 編集 UI とフォーム型テンプレ簡素版)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -235,7 +235,7 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] `TemplateDialog.svelte` の `aria-label` も `t()` 化
   - [x] `onMount` + `reloadSettings` で `setLocale(resolveLocale(localeMode))` を呼び、`settings.json` の locale 変更が UI 全体にリアクティブ反映
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
-- [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
+- [x] **キーバインド設定 UI**(2026-05-02)。`KeybindingsDialog.svelte` 新設、ツールバー右端から開く専用ダイアログ。各コマンドのキー欄をクリック → 押したキーを `Mod-Shift-x` 形式で `settings.keybindings` に保存(override 経路は既存)。「標準に戻す」で override 削除。衝突警告あり。`<input>` ではなく `<div tabindex="0">` でキャプチャして emacs 風 input bindings を回避(完全回避できない GTK Emacs テーマは OS 側設定の問題なので尊重して上書きしない方針)。matchKey は e.key と e.code 両方を試して keymap layout / GTK 変換に両対応
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
 - [x] **設定読み込みエラーの可視化**(2026-05-02)。Rust の `validate_settings_json` で `serde_json` パースして「行 X 列 Y: …」を返し、ステータスバーに表示。修正後 reload 成功で自動クリア(専用フラグ `settingsErrorActive` で他の error メッセージとは独立に管理)
 
@@ -477,6 +477,15 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - Obsidian / Typora は CodeMirror 6 の Decoration API でエディタ側に被せる方式
   - tinymist preview の SVG 出力は contentEditable 化できない(SVG → Typst の逆変換不能)
   - Typst は Markdown より文法が複雑で、装飾で隠せるノード(見出し / 強調 / リスト / リンク)、プレースホルダ代用ノード(数式 / 表)、生コードのまま見せるノード(`#let` / `#import` / 関数定義)の 3 カテゴリに分かれる → Phase 3 の「設計書作成」が一番重い作業
+
+### 2026-05-02: キーバインド設定 UI(GTK key theme との折り合い)
+- 実装:`KeybindingsDialog.svelte` 新設、ツールバー右端のキーボードアイコンから開く。各コマンドのキー欄をクリックでキャプチャ、押されたキーを `Mod-Shift-x` 形式で `settings.keybindings` に保存。「標準に戻す」「クリア」「衝突警告」付き
+- 物理キー優先化:`matchKey` を `e.key` と `e.code` 両方比較に拡張、KeybindingsDialog の capture も `e.code` を `KeyB → "b"` 形式に正規化。これで keymap layout 違いや一部 GTK 変換に対応
+- **判断:GNOME の GTK key theme = Emacs 環境では Ctrl+B が OS レベルで完全に ArrowLeft に変換されて届く(`Ctrl` 修飾子も消える)ため、JS 側で回避不能**
+  - 検討した A 案(Yuhitsu 起動時に gtk crate で key theme を `Default` に override)は、ユーザが OS 単位で設定したキーバインドを Yuhitsu が奪う形になり、ユーザの主要設定を尊重しない
+  - **氏判断**:Yuhitsu のターゲット層(事務 / 営業 / CUI 苦手層)は emacs theme を有効化しないため、影響は emacs theme を能動的に有効化した上級ユーザのみ。彼らは OS の挙動を理解して受け入れているはずで、Yuhitsu が上書きするのは越権
+  - 採用案:**OS 設定を尊重し、Yuhitsu からは介入しない**。emacs theme ユーザは別キーを使うか、OS 設定を切替える
+- コード上のコメントで方針を明示(`onCaptureKeydown` 冒頭)
 
 ### 2026-05-02: ステータスバー文字数の空白除外モード + 設定読み込みエラー可視化 + タブ active 配色修正
 - **氏要望(charCountMode)**:文字数カウントの「空白を除外する / 含める」を選びたい。標準は除外(原稿カウント感覚)

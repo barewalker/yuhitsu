@@ -220,6 +220,19 @@ function parseToolbarItems(raw: unknown): ToolbarItem[] {
     // ツールバーの右端に追加(設定は最も右が VSCode 流)
     filtered = [...filtered, "open-settings"];
   }
+  if (!filtered.includes("open-keybindings")) {
+    // open-settings の手前に挟む(設定系を 2 つ並べる)
+    const idx = filtered.indexOf("open-settings");
+    if (idx >= 0) {
+      filtered = [
+        ...filtered.slice(0, idx),
+        "open-keybindings",
+        ...filtered.slice(idx),
+      ];
+    } else {
+      filtered = [...filtered, "open-keybindings"];
+    }
+  }
   return filtered;
 }
 
