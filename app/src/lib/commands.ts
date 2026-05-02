@@ -10,6 +10,7 @@ import BookOpen from "@lucide/svelte/icons/book-open";
 import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Keyboard from "@lucide/svelte/icons/keyboard";
+import LayoutGrid from "@lucide/svelte/icons/layout-grid";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -80,6 +81,7 @@ export const COMMAND_IDS = [
   "toggle-preview",
   "open-settings",
   "open-keybindings",
+  "open-toolbar-edit",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -114,6 +116,7 @@ export interface CommandContext {
   prevTab: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
   openKeybindings: () => void | Promise<void>;
+  openToolbarEdit: () => void | Promise<void>;
 }
 
 export interface CommandDef {
@@ -381,6 +384,13 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: false,
     run: (ctx) => ctx.openKeybindings(),
   },
+  "open-toolbar-edit": {
+    id: "open-toolbar-edit",
+    labelKey: "command.openToolbarEdit",
+    icon: LayoutGrid,
+    needsEditor: false,
+    run: (ctx) => ctx.openToolbarEdit(),
+  },
 };
 
 // ツールバー上の項目。コマンド ID か区切り。
@@ -428,6 +438,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-toolbar-edit",
       "open-keybindings",
       "open-settings",
     ],
@@ -450,6 +461,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-toolbar-edit",
       "open-keybindings",
       "open-settings",
     ],
@@ -483,6 +495,7 @@ export const TOOLBAR_PRESETS: ToolbarPreset[] = [
       "divider",
       "toggle-project-view",
       "toggle-preview",
+      "open-toolbar-edit",
       "open-keybindings",
       "open-settings",
     ],

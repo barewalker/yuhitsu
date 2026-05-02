@@ -233,6 +233,19 @@ function parseToolbarItems(raw: unknown): ToolbarItem[] {
       filtered = [...filtered, "open-keybindings"];
     }
   }
+  if (!filtered.includes("open-toolbar-edit")) {
+    // open-keybindings の手前に挟む(設定系の並びをツールバー → キー → 設定 で揃える)
+    const idx = filtered.indexOf("open-keybindings");
+    if (idx >= 0) {
+      filtered = [
+        ...filtered.slice(0, idx),
+        "open-toolbar-edit",
+        ...filtered.slice(idx),
+      ];
+    } else {
+      filtered = [...filtered, "open-toolbar-edit"];
+    }
+  }
   return filtered;
 }
 

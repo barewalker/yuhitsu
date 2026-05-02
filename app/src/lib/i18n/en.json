@@ -32,7 +32,8 @@
     "toggleProjectView": "Toggle project view",
     "togglePreview": "Toggle preview",
     "openSettings": "Open settings file",
-    "openKeybindings": "Keybindings"
+    "openKeybindings": "Keybindings",
+    "openToolbarEdit": "Edit toolbar"
   },
   "tab": {
     "untitled": "(Untitled)"
@@ -117,6 +118,17 @@
     "clear": "Clear",
     "close": "Close",
     "conflict": "Conflicts with \"{label}\""
+  },
+  "toolbarEdit": {
+    "title": "Edit toolbar",
+    "ariaLabel": "Edit toolbar",
+    "current": "Current toolbar (drag to reorder)",
+    "add": "Available items",
+    "addDivider": "Divider",
+    "divider": "Divider",
+    "presets": "Apply preset",
+    "remove": "Remove",
+    "close": "Close"
   },
   "statusbar": {
     "lineCol": "Ln {line}, Col {col}",

@@ -23,6 +23,7 @@
     saveFirstRunDone,
     saveWorkspace,
     saveKeybindings,
+    saveToolbarItems,
   } from "$lib/settings";
   import type { LSPClient } from "@codemirror/lsp-client";
   import { pathToFileUri, startLspSession, type LspSession } from "$lib/lsp";
@@ -38,6 +39,7 @@
   import ProjectTree from "$lib/ProjectTree.svelte";
   import TemplateDialog from "$lib/TemplateDialog.svelte";
   import KeybindingsDialog from "$lib/KeybindingsDialog.svelte";
+  import ToolbarEditDialog from "$lib/ToolbarEditDialog.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
   import { listTemplates, resolveTemplate } from "$lib/templates";
@@ -89,6 +91,7 @@
   let firstRunDone = $state(true); // 起動時に loadSettings で本物の値に上書き
   let templateDialogOpen = $state(false);
   let keybindingsDialogOpen = $state(false);
+  let toolbarEditDialogOpen = $state(false);
   // settings.json の絶対パス。起動時に Rust から取得して保持し、
   // save() でこのパスに書いたら自動で reloadSettings を呼ぶための比較用。
   let settingsPath = $state<string | null>(null);
@@ -1007,6 +1010,7 @@
       prevTab,
       openSettings,
       openKeybindings,
+      openToolbarEdit,
     };
   }
 
@@ -1600,6 +1604,20 @@
     }
   }
 
+  // ツールバー編集ダイアログ。並び替え / 削除 / 追加 / プリセット適用を
+  // 行うとここに通知され、toolbarItems を更新 + Tauri Store に永続化する。
+  function openToolbarEdit() {
+    toolbarEditDialogOpen = true;
+  }
+  async function applyToolbarUpdate(next: ToolbarItem[]) {
+    toolbarItems = next;
+    try {
+      await saveToolbarItems(next);
+    } catch (e) {
+      setStatus(t("status.settingsSaveFailed", { error: String(e) }));
+    }
+  }
+
   // 参考文献ファイル(.bib / .yml)を選んでドキュメント末尾に
   // #bibliography("...") を挿入する。Typst は両形式をネイティブ対応。
   async function pickAndInsertBibliography() {
@@ -2072,6 +2090,14 @@
       {keybindings}
       onUpdate={applyKeybindingsUpdate}
       onClose={() => (keybindingsDialogOpen = false)}
+    />
+  {/if}
+
+  {#if toolbarEditDialogOpen}
+    <ToolbarEditDialog
+      items={toolbarItems}
+      onUpdate={applyToolbarUpdate}
+      onClose={() => (toolbarEditDialogOpen = false)}
     />
   {/if}
 

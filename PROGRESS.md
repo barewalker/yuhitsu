@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(キーバインド設定 UI を実装、Sprint 3 残はツールバー D&D 編集 UI とフォーム型テンプレ簡素版)
+最終更新: 2026-05-02(ツールバー D&D 編集 UI 実装、Sprint 3 残はフォーム型テンプレ簡素版のみ)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -234,7 +234,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] `+page.svelte` の全 UI 文字列(確認ダイアログ / ステータス / プレースホルダ / aria-label / タブ (無題) / プロジェクトビュー / iframe title / ファイル選択フィルタ)を `t()` 経由に統一
   - [x] `TemplateDialog.svelte` の `aria-label` も `t()` 化
   - [x] `onMount` + `reloadSettings` で `setLocale(resolveLocale(localeMode))` を呼び、`settings.json` の locale 変更が UI 全体にリアクティブ反映
-- [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
+- [x] **ツールバー D&D 編集 UI**(2026-05-02)。`ToolbarEditDialog.svelte` 新設、ツールバー右端から開く専用ダイアログ。3 セクション構成:
+  - **現在のツールバー**(上段)— pointer events で D&D 並び替え、× ホバー削除、`flex-wrap: nowrap` + 横スクロールで 1 段固定。アイコンのみ表示で実ツールバーと同じスリムさ
+  - **追加できる項目**(中段)— 全コマンド + divider をアイコン+ラベルのグリッドで一覧。クリックで末尾追加
+  - **プリセットを適用**(下段)— TOOLBAR_PRESETS の 3 種を選んで一括上書き
+  - `svelte-dnd-action` ではなく pointer events で自前実装(WebKitGTK の HTML5 D&D 既知不具合を避ける、タブ並び替えと同じ流儀)
+  - `parseToolbarItems` の migration で既存設定にも `open-toolbar-edit` を自動追加
 - [x] **キーバインド設定 UI**(2026-05-02)。`KeybindingsDialog.svelte` 新設、ツールバー右端から開く専用ダイアログ。各コマンドのキー欄をクリック → 押したキーを `Mod-Shift-x` 形式で `settings.keybindings` に保存(override 経路は既存)。「標準に戻す」で override 削除。衝突警告あり。`<input>` ではなく `<div tabindex="0">` でキャプチャして emacs 風 input bindings を回避(完全回避できない GTK Emacs テーマは OS 側設定の問題なので尊重して上書きしない方針)。matchKey は e.key と e.code 両方を試して keymap layout / GTK 変換に両対応
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
 - [x] **設定読み込みエラーの可視化**(2026-05-02)。Rust の `validate_settings_json` で `serde_json` パースして「行 X 列 Y: …」を返し、ステータスバーに表示。修正後 reload 成功で自動クリア(専用フラグ `settingsErrorActive` で他の error メッセージとは独立に管理)

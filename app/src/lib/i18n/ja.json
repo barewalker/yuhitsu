@@ -32,7 +32,8 @@
     "toggleProjectView": "プロジェクトビュー表示切替",
     "togglePreview": "プレビュー表示切替",
     "openSettings": "設定ファイルを開く",
-    "openKeybindings": "キーバインド設定"
+    "openKeybindings": "キーバインド設定",
+    "openToolbarEdit": "ツールバー編集"
   },
   "tab": {
     "untitled": "(無題)"
@@ -117,6 +118,17 @@
     "clear": "クリア",
     "close": "閉じる",
     "conflict": "「{label}」と衝突しています"
+  },
+  "toolbarEdit": {
+    "title": "ツールバー編集",
+    "ariaLabel": "ツールバー編集",
+    "current": "現在のツールバー(ドラッグで並び替え)",
+    "add": "追加できる項目",
+    "addDivider": "区切り線",
+    "divider": "区切り線",
+    "presets": "プリセットを適用",
+    "remove": "削除",
+    "close": "閉じる"
   },
   "statusbar": {
     "lineCol": "行 {line}, 列 {col}",
