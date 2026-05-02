@@ -142,7 +142,16 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] エディタ操作 API レイヤを Svelte UI / Tauri command / 将来の MCP ハンドラから共通で呼べる形に整理 — Sprint 3 (3) で `$lib/commands.ts` のコマンドカタログ化が完了。`{ id, label, run, ... }` の形で 19 種を集約し、ツールバー / キーバインド / 設定永続化が同じ ID を参照する。MCP ハンドラから呼ぶ際もこのカタログを再利用できる構造
 - [ ] 文書状態(全文・カーソル・選択範囲・dirty)の JSON シリアライズ可能性確保
 - [x] Tauri Store の設定領域に `ai.*` サブカテゴリを切る — 操作モード実装の副産物として完了(`$lib/settings.ts` の Settings 型に領域確保済み)
-- [ ] `@codemirror/merge`(MIT)を評価(後で AI 提案 diff を見せる UI の素地)
+- [x] `@codemirror/merge`(MIT)を評価(2026-05-02 完了、Phase 2 採用前提で依存追加済み)
+  - **採用方針**:`unifiedMergeView`(既存エディタ上に inline で diff を表示)を Phase 2 で採用
+    - 別 view を作らないので Yuhitsu の 2 ペイン構成(エディタ + preview)と競合しない
+    - `acceptChunk` / `rejectChunk` API が標準で付き、ユーザが各チャンクを個別判断可能
+    - `mergeControls` で accept/reject ボタンの UI を Yuhitsu テーマに合わせてカスタム可
+    - `collapseUnchanged` で長文 diff を折り畳める
+    - `allowInlineDiffs` で単語単位の差分ハイライトも可
+  - 不採用:`MergeView`(左右 2 ペイン版)— Yuhitsu の preview と競合、サイドバイサイド比較は preview 側で十分
+  - 注意:Compartment 化が必要(AI 提案 enabled の時だけ extension 投入、disable で外す)。LSP / syntax highlight / vim/emacs モードとの両立は実装時に確認
+  - 想定実装(Phase 2):AI が `currentDoc → suggested` の diff を提案 → `unifiedMergeView({ original: currentDoc, ... })` を Compartment に dispatch → ユーザが各チャンクを accept/reject → accept で merge view を外す
 
 #### Sprint 3: 一般ユーザに「コードを書かせない」ための橋渡し(2026-04-28 氏合意で Phase 2 前倒し着手)
 **狙い**: 現状の「Typst を書ける人にとって便利な GUI」から「コード非経験層が文書を作れる GUI」へ転換する。Yuhitsu のターゲット(事務・営業・CUI 苦手な技術者)が初めてアプリを開いた時の体験を変える。
