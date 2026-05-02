@@ -425,18 +425,107 @@
   }
 
   .cm-host :global(.cm-tooltip-hover) {
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: 12px;
-    line-height: 1.5;
+    line-height: 1.55;
   }
 
-  .cm-host :global(.cm-tooltip-hover img) {
+  /* hover tooltip 内の Markdown を読みやすくする(@codemirror/lsp-client が
+     `marked` で HTML 化したもの。.cm-lsp-hover-tooltip 配下に通常の
+     <h1..6>, <p>, <code>, <pre>, <ul>, <ol>, <a>, <hr> などが出てくる) */
+  .cm-host :global(.cm-lsp-hover-tooltip) {
+    color: var(--text-primary);
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip > *:first-child) {
+    margin-top: 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip > *:last-child) {
+    margin-bottom: 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip h1),
+  .cm-host :global(.cm-lsp-hover-tooltip h2),
+  .cm-host :global(.cm-lsp-hover-tooltip h3),
+  .cm-host :global(.cm-lsp-hover-tooltip h4),
+  .cm-host :global(.cm-lsp-hover-tooltip h5),
+  .cm-host :global(.cm-lsp-hover-tooltip h6) {
+    margin: 8px 0 4px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip h1) { font-size: 14px; }
+  .cm-host :global(.cm-lsp-hover-tooltip h2) { font-size: 13px; }
+  .cm-host :global(.cm-lsp-hover-tooltip h3),
+  .cm-host :global(.cm-lsp-hover-tooltip h4),
+  .cm-host :global(.cm-lsp-hover-tooltip h5),
+  .cm-host :global(.cm-lsp-hover-tooltip h6) { font-size: 12px; }
+
+  .cm-host :global(.cm-lsp-hover-tooltip p) {
+    margin: 4px 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip ul),
+  .cm-host :global(.cm-lsp-hover-tooltip ol) {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip li) {
+    margin: 1px 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip a) {
+    color: var(--syntax-function);
+    text-decoration: underline;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 6px 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip code) {
+    padding: 0 4px;
+    background: var(--bg-elevated-2);
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--syntax-string);
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip pre) {
+    padding: 6px 8px;
+    margin: 4px 0;
+    background: var(--bg-elevated-2);
+    border-radius: 3px;
+    overflow-x: auto;
+    line-height: 1.45;
+  }
+  /* pre 内の code は背景を二重にしないため透明化 */
+  .cm-host :global(.cm-lsp-hover-tooltip pre code) {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 11.5px;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip blockquote) {
+    margin: 4px 0;
+    padding: 2px 8px;
+    border-left: 2px solid var(--border-strong);
+    color: var(--text-secondary);
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip table) {
+    border-collapse: collapse;
+    margin: 4px 0;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip th),
+  .cm-host :global(.cm-lsp-hover-tooltip td) {
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+  }
+  .cm-host :global(.cm-lsp-hover-tooltip img) {
     max-width: 100%;
     height: auto;
   }
 
-  .cm-host :global(.cm-tooltip-hover pre),
-  .cm-host :global(.cm-tooltip-hover code) {
+  /* hover 以外の tooltip(signature help / completion 説明文)も
+     pre / code は折り返す(横スクロールが出ないように) */
+  .cm-host :global(.cm-tooltip pre),
+  .cm-host :global(.cm-tooltip code) {
     white-space: pre-wrap;
     word-break: break-word;
   }
