@@ -317,6 +317,36 @@ fn dev_log(message: String) {
     eprintln!("[js] {message}");
 }
 
+// Tauri resources に同梱した Harano Aji フォント群が置かれるディレクトリ。
+// dev では `app/src-tauri/resources/HaranoAjiFonts/`、リリースでは
+// `<install>/resources/fonts/`(tauri.conf.json の bundle.resources で
+// `fonts/` 配下に名前を付け替えてバンドルしている)。
+//
+// tinymist の `--font-path` はディレクトリ指定で再帰探索するため、
+// dev/リリースで実体パスが違っても tinymist 側は同じ動作になる。
+// resources 解決に失敗したら None を返し、呼び出し側はシステムフォント
+// 任せのフォールバック動作を続ける(警告は出るが致命的でない)。
+fn bundled_font_dir(app: &AppHandle) -> Option<PathBuf> {
+    let resource = app.path().resource_dir().ok()?;
+    // dev では submodule のディレクトリ名がそのまま、リリースでは
+    // bundle.resources のマップで `fonts/` に名前変更されている。
+    // 両方を順に試す。
+    let release = resource.join("fonts");
+    if release.is_dir() {
+        return Some(release);
+    }
+    let dev = resource.join("resources").join("HaranoAjiFonts");
+    if dev.is_dir() {
+        return Some(dev);
+    }
+    // src-tauri/ 直下から相対(cargo run 経由)も試す
+    let cargo_dev = resource.join("../resources/HaranoAjiFonts");
+    if cargo_dev.is_dir() {
+        return Some(cargo_dev);
+    }
+    None
+}
+
 // Typst の `--root` に渡すプロジェクトルート。
 // Linux/macOS は `/`、Windows は入力パスのドライブ。tinymist は cwd を
 // 起点に root を相対化することがあり、cwd と root が食い違うと "entry
@@ -502,10 +532,8 @@ async fn start_preview(
     // ルートを root として渡す(セキュリティモデルは緩むが、ユーザ自身のファイルを
     // 自分のエディタで読むだけなので許容)。Windows は入力パスのドライブを起点に。
     let root = filesystem_root_for(&path);
-    let child = Command::new("tinymist")
-        // tinymist が `--root` を内部で相対化する際の起点を揃える(cwd と
-        // root を一致させないと entry が root 外と判定されることがある)。
-        .current_dir(&root)
+    let mut cmd = Command::new("tinymist");
+    cmd.current_dir(&root)
         .args([
             "preview",
             "--no-open",
@@ -515,8 +543,12 @@ async fn start_preview(
             PREVIEW_CONTROL_PLANE,
             "--root",
             &root,
-            &path,
-        ])
+        ]);
+    if let Some(fonts) = bundled_font_dir(&app) {
+        cmd.args(["--font-path", &fonts.to_string_lossy()]);
+    }
+    cmd.arg(&path);
+    let child = cmd
         // dev 中は stderr をそのまま流したいので inherit、stdout は閉じておく
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
@@ -594,14 +626,18 @@ async fn preview_remove_memory(
 }
 
 #[tauri::command]
-fn export_pdf(input: String, output: String) -> Result<(), String> {
+fn export_pdf(app: AppHandle, input: String, output: String) -> Result<(), String> {
     // preview と同じく filesystem ルートを `--root` に渡す。文書外の絶対パスを
     // 読みたい(例: ホーム配下のスクショ画像)用途に合わせる。
     let root = filesystem_root_for(&input);
-    let result = Command::new("tinymist")
-        // start_preview と同じく cwd を root に揃える
-        .current_dir(&root)
-        .args(["compile", "--root", &root, &input, &output])
+    let mut cmd = Command::new("tinymist");
+    cmd.current_dir(&root)
+        .args(["compile", "--root", &root]);
+    if let Some(fonts) = bundled_font_dir(&app) {
+        cmd.args(["--font-path", &fonts.to_string_lossy()]);
+    }
+    cmd.args([&input, &output]);
+    let result = cmd
         .output()
         .map_err(|e| format!("failed to spawn tinymist compile: {}", e))?;
     if !result.status.success() {
@@ -644,8 +680,12 @@ impl LspState {
 async fn lsp_start(app: AppHandle, state: State<'_, LspState>) -> Result<(), String> {
     state.kill_existing().await;
 
-    let mut child = TokioCommand::new("tinymist")
-        .arg("lsp")
+    let mut cmd = TokioCommand::new("tinymist");
+    cmd.arg("lsp");
+    if let Some(fonts) = bundled_font_dir(&app) {
+        cmd.args(["--font-path", &fonts.to_string_lossy()]);
+    }
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

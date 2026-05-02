@@ -30,6 +30,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "resources/HaranoAjiFonts/HaranoAjiMincho-Regular.otf": "fonts/HaranoAjiMincho-Regular.otf",
+      "resources/HaranoAjiFonts/HaranoAjiMincho-Bold.otf": "fonts/HaranoAjiMincho-Bold.otf",
+      "resources/HaranoAjiFonts/HaranoAjiGothic-Regular.otf": "fonts/HaranoAjiGothic-Regular.otf",
+      "resources/HaranoAjiFonts/HaranoAjiGothic-Bold.otf": "fonts/HaranoAjiGothic-Bold.otf",
+      "resources/HaranoAjiFonts/LICENSE": "fonts/HaranoAjiFonts-LICENSE",
+      "resources/HaranoAjiFonts/README.md": "fonts/HaranoAjiFonts-README.md"
+    }
   }
 }

@@ -1,0 +1,7 @@
+[submodule "app/src-tauri/resources/HaranoAjiFonts"]
+	path = app/src-tauri/resources/HaranoAjiFonts
+	url = https://github.com/trueroad/HaranoAjiFonts.git
+	# 巨大リポジトリ(~140 MB、history は本体には不要)。新規 clone する
+	# 開発者の負担を減らすため shallow を既定に。
+	# 反映には `git config submodule.app/src-tauri/resources/HaranoAjiFonts.shallow true` を別途実行する必要がある(.gitmodules の shallow は git 2.10+ で推奨設定として扱われるが、user config で確定)
+	shallow = true

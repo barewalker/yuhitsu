@@ -117,7 +117,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [ ] 議事録
   - [ ] 技術論文(材料学会スタイル等)
   - [ ] スライド
-- [ ] Harano Aji フォント同梱
+- [x] Harano Aji フォント同梱(2026-05-02、submodule + Tauri resources)
+  - `app/src-tauri/resources/HaranoAjiFonts/` に `trueroad/HaranoAjiFonts` を **git submodule** として追加。本家(SIL OFL 1.1)の更新追随は SHA を上げるだけで完結する
+  - 同梱対象は **Mincho/Gothic の Regular + Bold の 4 ファイルだけ**(+ LICENSE / README)。`tauri.conf.json` の `bundle.resources` で `fonts/<basename>.otf` に名前を付け替えてバンドル。インストーラ増分は約 +22 MB
+  - Rust 側に `bundled_font_dir(&AppHandle)` ヘルパを追加。`app.path().resource_dir()` 経由で dev/リリース両方のパスを解決し、tinymist preview / lsp / compile のコマンドラインに `--font-path` を 1 つ追加で渡す
+  - 全ウェイトが必要になったら `tauri.conf.json` の resources に行を増やすだけで済む(submodule に元ファイルが揃っているため)
+  - 確認:`pgrep -af tinymist` で `--font-path /...resources/.../fonts` が両方の subprocess に渡っていることを確認済み
 - [ ] 日本語 UI(i18n 基盤)
 
 #### (5) エディタ操作モード3種ビルトイン(差別化ポイント、設定で切替)
