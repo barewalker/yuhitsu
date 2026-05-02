@@ -77,6 +77,15 @@
 
   export type LanguageMode = "typst" | "plain";
 
+  // ステータスバー用のカーソル情報。line / col は 1-origin、selected は
+  // 選択範囲の長さ(文字数、選択なしなら 0)、total は doc 全体の文字数。
+  export type CursorInfo = {
+    line: number;
+    col: number;
+    selected: number;
+    total: number;
+  };
+
   type Props = {
     value: string;
     /** タブ切替で復元する state スナップショット。指定があれば
@@ -92,6 +101,10 @@
     /** 現在編集中ファイルの絶対パス。LSP に渡す URI 構築に使う */
     filePath?: string | null;
     onChange?: (next: string) => void;
+    /** カーソル位置 / 選択範囲 / doc 全体の文字数を通知。
+     *  ステータスバーの "行 X 列 Y" / "文字数" 等に使う。
+     *  doc 変化時 + 選択変化時の両方で発火する。 */
+    onCursorChange?: (info: CursorInfo) => void;
     /** view 構築完了時に通知。親はこれを通じてコマンドを呼ぶ */
     onReady?: (view: EditorView) => void;
     /** view 破棄時に通知。親側のキャッシュを切るために使う */
@@ -109,6 +122,7 @@
     lspClient = null,
     filePath = null,
     onChange,
+    onCursorChange,
     onReady,
     onTeardown,
     onValueApplied,
@@ -214,9 +228,23 @@
 
   onMount(() => {
     const updateListener = EditorView.updateListener.of((update) => {
-      if (!update.docChanged) return;
       if (applyingExternal) return;
-      onChange?.(update.state.doc.toString());
+      // doc 変化はテキスト永続化 + preview memory file 注入につなぐ。
+      if (update.docChanged) {
+        onChange?.(update.state.doc.toString());
+      }
+      // ステータスバー用に「カーソル位置 + 選択範囲 + 全文字数」を通知。
+      // doc 変化と選択変化の両方で発火させる(選択だけ動いた時にも追従)。
+      if (update.docChanged || update.selectionSet) {
+        const sel = update.state.selection.main;
+        const line = update.state.doc.lineAt(sel.head);
+        onCursorChange?.({
+          line: line.number,
+          col: sel.head - line.from + 1,
+          selected: sel.to - sel.from,
+          total: update.state.doc.length,
+        });
+      }
     });
 
     const state = EditorState.create({
@@ -243,6 +271,16 @@
 
     view = new EditorView({ state, parent: host });
     onReady?.(view);
+    // 初期カーソル情報を通知。updateListener は docChanged / selectionSet
+    // が立った時しか走らないため、view 構築直後の値はここで明示的に流す。
+    const sel = state.selection.main;
+    const initLine = state.doc.lineAt(sel.head);
+    onCursorChange?.({
+      line: initLine.number,
+      col: sel.head - initLine.from + 1,
+      selected: sel.to - sel.from,
+      total: state.doc.length,
+    });
   });
 
   onDestroy(() => {

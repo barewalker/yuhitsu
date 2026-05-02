@@ -887,6 +887,44 @@ fn load_tab_state(app: AppHandle) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("failed to read tab state: {}", e))
 }
 
+// settings.json の JSON 構文を検証する。Tauri Store の reload はパース失敗
+// 時の詳細(行・列)を返さないので、ユーザに「どこが壊れているか」を伝える
+// ためにここで serde_json で別途パースして行・列を抽出する。
+//
+// 戻り値:
+//   Ok(None)         パース成功(または settings.json 未作成)
+//   Ok(Some(msg))    パースエラー。msg は人間可読な「行 X, 列 Y: ...」
+//
+// Err は I/O エラー(read 失敗など)のみ。fs read を本体エラーにせず
+// Some(msg) で返すかは要検討だが、ファイル read 失敗自体は別問題なので
+// Err のままにする。
+#[tauri::command]
+fn validate_settings_json(app: AppHandle) -> Result<Option<String>, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app_data_dir: {}", e))?;
+    let path = dir.join("settings.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read settings.json: {}", e))?;
+    if content.trim().is_empty() {
+        // 空ファイル(初回 seed の "{}\n" すら無い)は許容して null 扱い
+        return Ok(None);
+    }
+    match serde_json::from_str::<serde_json::Value>(&content) {
+        Ok(_) => Ok(None),
+        Err(e) => Ok(Some(format!(
+            "settings.json 行 {} 列 {}: {}",
+            e.line(),
+            e.column(),
+            e
+        ))),
+    }
+}
+
 #[tauri::command]
 fn get_settings_path(app: AppHandle) -> Result<String, String> {
     let dir = app
@@ -930,6 +968,7 @@ pub fn run() {
             lsp_stop,
             dev_log,
             get_settings_path,
+            validate_settings_json,
             prepare_untitled_path,
             cleanup_untitled_path,
             save_tab_state,

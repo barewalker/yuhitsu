@@ -19,6 +19,7 @@
     type PaperSize,
     type ThemeMode,
     loadSettings,
+    validateSettingsJson,
     saveFirstRunDone,
     saveWorkspace,
   } from "$lib/settings";
@@ -50,6 +51,12 @@
   // Editor.svelte は codemirror-lang-typst → typst-syntax の WASM を読み込む。
   // SvelteKit の hydration 中に top-level await の解決順序が噛み合わず TDZ を踏むため、
   // onMount で動的 import して hydration 完了後にロードする。
+  type CursorInfo = {
+    line: number;
+    col: number;
+    selected: number;
+    total: number;
+  };
   let Editor = $state<Component<{
     value: string;
     externalState?: EditorState | null;
@@ -58,6 +65,7 @@
     lspClient?: LSPClient | null;
     filePath?: string | null;
     onChange?: (next: string) => void;
+    onCursorChange?: (info: CursorInfo) => void;
     onReady?: (view: EditorView) => void;
     onTeardown?: () => void;
     onValueApplied?: (view: EditorView) => void;
@@ -241,10 +249,24 @@
     return true;
   }
 
+  // settings.json のエラー表示状態を覚えるフラグ。reloadSettings 成功時に
+  // 自動クリアするために使う(ユーザが直したらステータスバーが綺麗になる)。
+  let settingsErrorActive = false;
+
   // 設定ファイル(settings.json)を外部エディタで書き換えた後、
   // Yuhitsu にフォーカスが戻った時点で再読み込みして反映する。
   // 設定 UI 画面ができるまでの暫定手段(Phase 2 で正式 UI を予定)。
   async function reloadSettings() {
+    // JSON 構文を先に検証して、エラーがあればステータスバーに表示する。
+    // Tauri Store の reload は壊れた JSON を黙ってデフォルトに戻すため、
+    // ユーザは「設定を変えたのに反映されない」だけ気付くことになる。
+    // 行・列付きのメッセージを出して原因を即座に分かるようにする。
+    const jsonError = await validateSettingsJson();
+    if (jsonError) {
+      setStatus(t("status.settingsJsonError", { error: jsonError }));
+      settingsErrorActive = true;
+      return;
+    }
     try {
       const settings = await loadSettings();
       editorMode = settings.editor.mode;
@@ -258,8 +280,15 @@
       toolbarItems = settings.toolbar.items;
       keybindings = settings.keybindings;
       statusbarVisible = settings.workspace.statusbarVisible;
+      // JSON エラー表示が残っていた時だけクリア(他の error メッセージは
+      // 触らない)
+      if (settingsErrorActive) {
+        clearStatus();
+        settingsErrorActive = false;
+      }
     } catch (e) {
-      console.warn("settings reload failed:", e);
+      setStatus(t("status.settingsLoadFailed", { error: String(e) }));
+      settingsErrorActive = true;
     }
   }
 
@@ -719,6 +748,10 @@
       setStatus(String(e));
     }
   }
+
+  // ステータスバー表示用のカーソル情報。タブ切替時は Editor の onValueApplied
+  // → setState 経由で selectionSet が立ち、updateListener から自動更新される。
+  let cursor = $state<CursorInfo | null>(null);
 
   function onEditorChange(next: string) {
     const tab = getActiveTab();
@@ -1632,6 +1665,14 @@
       });
       // 設定の読み込みは hydration 後に。Tauri Store は async API なので
       // onMount で起動時に1回読む。失敗時はデフォルトを使う。
+      // JSON 構文エラーがある場合はステータスバーで通知して、デフォルト
+      // で起動を続行する(設定の編集 UI が無い間は外部編集が前提なので、
+      // 起動できなくなるのは避ける)。
+      const initialJsonError = await validateSettingsJson();
+      if (initialJsonError) {
+        setStatus(t("status.settingsJsonError", { error: initialJsonError }));
+        settingsErrorActive = true;
+      }
       try {
         const settings = await loadSettings();
         editorMode = settings.editor.mode;
@@ -1679,7 +1720,10 @@
           }
         }
       } catch (e) {
-        console.warn("settings load failed, using defaults:", e);
+        // JSON エラーは事前 validate で見ているので、ここに来るのは
+        // 別の予期せぬエラー(I/O 等)。状態は表示してデフォルト続行する。
+        setStatus(t("status.settingsLoadFailed", { error: String(e) }));
+        settingsErrorActive = true;
       }
       // "auto" 中に OS のテーマ設定が変わったら追従する
       const mql = window.matchMedia("(prefers-color-scheme: light)");
@@ -1882,6 +1926,7 @@
             {lspClient}
             filePath={path}
             onChange={onEditorChange}
+            onCursorChange={(info) => (cursor = info)}
             onReady={onEditorReady}
             onTeardown={onEditorTeardown}
             onValueApplied={onEditorValueApplied}
@@ -1930,9 +1975,8 @@
   {#if statusbarVisible}
     <!--
       ステータスバー(画面下部、設定で on/off 切替)。
-      VS Code 風の 1 行レイアウト。左にメッセージ、右に各種カウンタ。
-      行数 / 文字数 / ワードカウント(仕上り時)は Phase 2 以降で実装する仕込み。
-      ワードカウントは Typst をコンパイルした最終本文の字数を出す前提。
+      左:status メッセージ / 右:行・列、文字数。
+      ワードカウント(Typst コンパイル後の本文字数)は Phase 2 以降に予定。
     -->
     <footer class="statusbar">
       <span class="statusbar-message">
@@ -1941,11 +1985,23 @@
         {/if}
       </span>
       <span class="statusbar-counters">
-        <!-- TODO(Phase 2): 行数 (例: Ln 12) -->
-        <span class="counter" data-slot="line"></span>
-        <!-- TODO(Phase 2): 文字数(エディタ上の生入力) -->
-        <span class="counter" data-slot="char"></span>
-        <!-- TODO(Phase 2): ワードカウント(Typst コンパイル後の本文字数) -->
+        {#if cursor}
+          <span class="counter" data-slot="line"
+            >{t("statusbar.lineCol", {
+              line: String(cursor.line),
+              col: String(cursor.col),
+            })}</span
+          >
+          <span class="counter" data-slot="char"
+            >{cursor.selected > 0
+              ? t("statusbar.charsSelected", {
+                  selected: String(cursor.selected),
+                  total: String(cursor.total),
+                })
+              : t("statusbar.chars", { total: String(cursor.total) })}</span
+          >
+        {/if}
+        <!-- ワードカウント(Typst コンパイル後)は Phase 2 で実装する空スロット -->
         <span class="counter" data-slot="word"></span>
       </span>
     </footer>
@@ -2304,7 +2360,12 @@
   }
 
   .tab.active {
+    /* active タブはエディタ面と同色(地続き)に。これだけだとダークで
+       "周囲より暗くなって選択中に見えない" 違和感が出るので、上端に
+       accent 線を 2px 入れて選択中を明示する(VSCode 流儀)。
+       ライトでも同じ流儀で一貫(active = エディタと同色 + 上 accent 線)。 */
     background: var(--bg-base);
+    box-shadow: inset 0 2px 0 var(--accent);
   }
 
   .tab.dragging {

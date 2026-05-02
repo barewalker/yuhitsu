@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { invoke } from "@tauri-apps/api/core";
 import {
   COMMAND_IDS,
   getDefaultToolbarItems,
@@ -255,6 +256,19 @@ function parseWorkspace(raw: unknown): WorkspaceSettings {
         ? obj.statusbarVisible
         : def.statusbarVisible,
   };
+}
+
+// settings.json の JSON 構文を検証する。null = 問題なし(パース可能 or
+// ファイル未作成)、文字列 = 人間可読なエラー(行・列付き)。Tauri Store
+// は reload 時のパース詳細を返さないので、ユーザに具体的な位置を伝える
+// ためにここで明示的にチェックする。
+export async function validateSettingsJson(): Promise<string | null> {
+  try {
+    const result = await invoke<string | null>("validate_settings_json");
+    return result;
+  } catch (e) {
+    return String(e);
+  }
 }
 
 export async function loadSettings(): Promise<Settings> {

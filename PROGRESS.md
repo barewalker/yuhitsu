@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(プロジェクトビュー拡張: 右クリックメニュー / 新規・リネーム・削除 / git status 連携)
+最終更新: 2026-05-02(設定読み込みエラー可視化 / タブ active 配色修正 / ステータスバー行・文字数を Phase 2 から前倒し実装)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -217,11 +217,11 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] ツールバーから filename / status 表示も撤去(タブと重複していた)
   - [x] 設定変更は `settings.json` 直編集 + ウィンドウへのフォーカス復帰時に自動再読み込み
         (再起動不要、`window.focus` イベントで `loadSettings` を再実行して各 state を更新)
-- [x] **ステータスバー(画面下部、設定で on/off)を仕込み**
+- [x] **ステータスバー(画面下部、設定で on/off)**
   - [x] `workspace.statusbarVisible`(デフォルト `false`)+ migration、`settings.json` 編集 + focus で切替
-  - [x] HTML 構造を配置:左にメッセージ、右に行数 / 文字数 / ワードカウント用の空スロット(`<span class="counter">` × 3)
-  - [x] 行数 / 文字数 / ワードカウントは **Phase 2 で実装する仕込みのみ**(コメントで明示)。
-        ワードカウントは Typst コンパイル後の本文字数(仕上り時)を想定
+  - [x] HTML 構造を配置:左にメッセージ、右に行数 / 文字数 / ワードカウント用の空スロット
+  - [x] **行・列 / 文字数表示を実装**(2026-05-02、Phase 2 から前倒し)。Editor.svelte に `onCursorChange` フックを追加し、updateListener で `selectionSet` / `docChanged` のいずれかが立った時に通知。選択中は `5 / 120 文字` 形式に切替
+  - [ ] ワードカウント(Typst コンパイル後の本文字数)は Phase 2 で実装(空スロット維持)
 - [x] **設定ファイル(settings.json)を Yuhitsu 自身のタブで開ける**(2026-05-01 実装、設定 UI ができるまでの一次手段)
   - [x] Rust `get_settings_path` コマンド(`app_data_dir` を返す、未作成なら空 JSON を作成)
   - [x] フロントの `open-settings` コマンド(Ctrl+, / Settings アイコン、ツールバー右端)
@@ -237,7 +237,7 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] **ツールバー D&D 編集 UI**(設定 JSON は既に書き換え可能、GUI で並び替えるのは別タスク。`svelte-dnd-action` 採用予定)
 - [ ] **キーバインド設定 UI**(`settings.keybindings` に override を保存する仕組みは整備済み、編集 UI のみ未実装)
 - [ ] **フォーム型テンプレート簡素版**(`#show: template.with(...)` の引数を右ペインのフォームに展開)
-- [ ] 設定読み込みエラーの可視化(JSON パースエラー等が UI に出ない問題、Phase 2 で改善)
+- [x] **設定読み込みエラーの可視化**(2026-05-02)。Rust の `validate_settings_json` で `serde_json` パースして「行 X 列 Y: …」を返し、ステータスバーに表示。修正後 reload 成功で自動クリア(専用フラグ `settingsErrorActive` で他の error メッセージとは独立に管理)
 
 ### 配布
 - [ ] winget で配布可能にする

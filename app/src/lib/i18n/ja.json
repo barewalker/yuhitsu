@@ -98,9 +98,16 @@
     "folderLoadFailed": "フォルダの読み込みに失敗: {error}",
     "openExternalFailed": "外部で開くのに失敗: {error}",
     "lspStartFailed": "LSP 起動に失敗: {error}",
-    "settingsSaveFailed": "設定保存に失敗: {error}"
+    "settingsSaveFailed": "設定保存に失敗: {error}",
+    "settingsLoadFailed": "設定読み込みに失敗: {error}",
+    "settingsJsonError": "設定ファイルの JSON が壊れています — {error}"
   },
   "templateDialog": {
     "ariaLabel": "テンプレート選択"
+  },
+  "statusbar": {
+    "lineCol": "行 {line}, 列 {col}",
+    "chars": "{total} 文字",
+    "charsSelected": "{selected} / {total} 文字"
   }
 }

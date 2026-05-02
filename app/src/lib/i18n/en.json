@@ -98,9 +98,16 @@
     "folderLoadFailed": "Failed to load folder: {error}",
     "openExternalFailed": "Failed to open externally: {error}",
     "lspStartFailed": "Failed to start LSP: {error}",
-    "settingsSaveFailed": "Failed to save settings: {error}"
+    "settingsSaveFailed": "Failed to save settings: {error}",
+    "settingsLoadFailed": "Failed to load settings: {error}",
+    "settingsJsonError": "settings.json has a syntax error — {error}"
   },
   "templateDialog": {
     "ariaLabel": "Template selection"
+  },
+  "statusbar": {
+    "lineCol": "Ln {line}, Col {col}",
+    "chars": "{total} chars",
+    "charsSelected": "{selected} / {total} chars"
   }
 }
