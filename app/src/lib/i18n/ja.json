@@ -42,7 +42,9 @@
     "discardTabSaved": "未保存の変更があります。保存しますか?",
     "exitApp": "未保存の変更があります。終了してよろしいですか?",
     "buttonSave": "保存",
-    "buttonDontSave": "保存しない"
+    "buttonDontSave": "保存しない",
+    "buttonOk": "OK",
+    "buttonCancel": "キャンセル"
   },
   "placeholder": {
     "loading": "読み込み中…",
@@ -64,7 +66,16 @@
     "change": "変更",
     "refresh": "更新",
     "refreshTooltip": "再読み込み",
-    "openHint": "「フォルダを開く」を押して、文書プロジェクトのフォルダを選んでください。"
+    "openHint": "「フォルダを開く」を押して、文書プロジェクトのフォルダを選んでください。",
+    "newFile": "新規ファイル",
+    "newFolder": "新規フォルダ",
+    "rename": "名前変更",
+    "delete": "削除",
+    "create": "作成",
+    "newFileTitle": "新規ファイル名",
+    "newFolderTitle": "新規フォルダ名",
+    "renameTitle": "新しい名前",
+    "deleteConfirm": "「{name}」を削除しますか?この操作は取り消せません。"
   },
   "preset": {
     "standard": "標準",

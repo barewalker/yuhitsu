@@ -32,7 +32,7 @@
     type PersistedTab,
   } from "$lib/tab-persist";
   import { insertBibliography, insertImage } from "$lib/editor-commands";
-  import { listDirectory, type DirEntry } from "$lib/project";
+  import { listDirectory, loadGitStatus, type DirEntry } from "$lib/project";
   import ProjectTree from "$lib/ProjectTree.svelte";
   import TemplateDialog from "$lib/TemplateDialog.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
@@ -659,6 +659,8 @@
       if (settingsPath && tab.path === settingsPath) {
         await reloadSettings();
       }
+      // 保存で変更状態が変わるので、プロジェクトビューの git バッジも更新
+      void refreshGitStatus();
       // tinymist がファイル変更を watch しているので start_preview 再起動は不要
       return true;
     } catch (e) {
@@ -1115,9 +1117,22 @@
     }
   }
 
+  // ファイル毎の git status code(? / M / A / D / R / U)。
+  // git repo でないフォルダの時は空 map。リフレッシュ・編集後に再読み込みする。
+  let gitStatus = $state<Record<string, string>>({});
+
   async function loadProjectTree(folder: string) {
     try {
       projectTree = await listDirectory(folder);
+      // ツリー再読込みに合わせて git status も更新。git 無しでもエラーに
+      // しない(loadGitStatus が黙って空 map を返す)
+      try {
+        const s = await loadGitStatus(folder);
+        gitStatus = s.entries;
+      } catch (e) {
+        gitStatus = {};
+        console.warn("[git] status load failed:", e);
+      }
     } catch (e) {
       projectTree = null;
       setStatus(t("status.folderLoadFailed", { error: String(e) }));
@@ -1127,6 +1142,206 @@
   async function refreshProjectTree() {
     if (!currentFolder) return;
     await loadProjectTree(currentFolder);
+  }
+
+  // 保存後など、ツリー構造は変わらないが git status だけ取り直したい時に
+  // 呼ぶ軽量版。listDirectory を再実行しないので体感が良い。
+  async function refreshGitStatus() {
+    if (!currentFolder) return;
+    try {
+      const s = await loadGitStatus(currentFolder);
+      gitStatus = s.entries;
+    } catch (e) {
+      console.warn("[git] status refresh failed:", e);
+    }
+  }
+
+  // ----- プロジェクトビュー: 右クリックメニュー -----
+
+  // 表示中の context menu 情報。null なら閉じている。
+  type TreeContextMenu = {
+    x: number;
+    y: number;
+    target: DirEntry;
+  };
+  let treeMenu = $state<TreeContextMenu | null>(null);
+
+  function openTreeContextMenu(e: MouseEvent, entry: DirEntry) {
+    treeMenu = { x: e.clientX, y: e.clientY, target: entry };
+  }
+  function closeTreeContextMenu() {
+    treeMenu = null;
+  }
+
+  // 名前入力ダイアログ。新規作成 / リネーム共通で使う簡易プロンプト。
+  // 表示中は promptDialog にメタを格納、submit / cancel で resolve する。
+  type PromptRequest = {
+    title: string;
+    initialValue: string;
+    placeholder: string;
+    okLabel: string;
+    resolve: (value: string | null) => void;
+  };
+  let promptDialog = $state<PromptRequest | null>(null);
+  let promptInput = $state("");
+
+  function askName(opts: {
+    title: string;
+    initialValue?: string;
+    placeholder?: string;
+    okLabel?: string;
+  }): Promise<string | null> {
+    return new Promise((resolve) => {
+      promptInput = opts.initialValue ?? "";
+      promptDialog = {
+        title: opts.title,
+        initialValue: promptInput,
+        placeholder: opts.placeholder ?? "",
+        okLabel: opts.okLabel ?? t("dialog.buttonOk"),
+        resolve,
+      };
+    });
+  }
+
+  function submitPrompt() {
+    const dlg = promptDialog;
+    if (!dlg) return;
+    promptDialog = null;
+    dlg.resolve(promptInput.trim() || null);
+  }
+
+  function cancelPrompt() {
+    const dlg = promptDialog;
+    if (!dlg) return;
+    promptDialog = null;
+    dlg.resolve(null);
+  }
+
+  // 各アクション。エラーは status バーに出してユーザに見せる。
+  async function handleNewFile() {
+    const target = treeMenu?.target;
+    closeTreeContextMenu();
+    if (!target) return;
+    // ファイルが選ばれていた場合は親ディレクトリ、フォルダなら自身を親に
+    const parent = target.is_dir
+      ? target.path
+      : await dirname(target.path);
+    const name = await askName({
+      title: t("project.newFileTitle"),
+      placeholder: "untitled.typ",
+      okLabel: t("project.create"),
+    });
+    if (!name) return;
+    try {
+      const created = await invoke<string>("create_file", {
+        parent,
+        name,
+      });
+      await refreshProjectTree();
+      // typ / テキストファイルなら開く
+      await openFileAtPath(created);
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  async function handleNewFolder() {
+    const target = treeMenu?.target;
+    closeTreeContextMenu();
+    if (!target) return;
+    const parent = target.is_dir
+      ? target.path
+      : await dirname(target.path);
+    const name = await askName({
+      title: t("project.newFolderTitle"),
+      placeholder: "new-folder",
+      okLabel: t("project.create"),
+    });
+    if (!name) return;
+    try {
+      await invoke("create_folder", { parent, name });
+      await refreshProjectTree();
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  async function handleRename() {
+    const target = treeMenu?.target;
+    closeTreeContextMenu();
+    if (!target) return;
+    const newName = await askName({
+      title: t("project.renameTitle"),
+      initialValue: target.name,
+      okLabel: t("project.rename"),
+    });
+    if (!newName || newName === target.name) return;
+    try {
+      const newPath = await invoke<string>("rename_path", {
+        oldPath: target.path,
+        newName,
+      });
+      // 開いているタブの path を追従させる(リネーム前の path を持つ
+      // タブがあれば差し替え、preview / LSP も乗せ替える)
+      const t0 = tabs.find((t) => t.path === target.path);
+      if (t0) {
+        t0.path = newPath;
+        if (t0.id === activeTabId && isTypstTab(t0)) {
+          await Promise.all([startPreview(newPath), ensureLspFor(newPath)]);
+        }
+      }
+      await refreshProjectTree();
+      schedulePersistTabs();
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  async function handleDelete() {
+    const target = treeMenu?.target;
+    closeTreeContextMenu();
+    if (!target) return;
+    const confirmed = await ask(
+      t("project.deleteConfirm", { name: target.name }),
+      {
+        title: t("dialog.title"),
+        kind: "warning",
+        okLabel: t("project.delete"),
+        cancelLabel: t("dialog.buttonDontSave"),
+      },
+    );
+    if (!confirmed) return;
+    try {
+      await invoke("delete_path", { path: target.path });
+      // 削除されたファイルがタブで開いていたらそのタブを閉じる
+      const orphan = tabs.find(
+        (t) => t.path && (t.path === target.path ||
+          t.path.startsWith(target.path + "/")),
+      );
+      if (orphan) {
+        // 削除済みなので dirty 確認をスキップ。closeTab を直接呼ぶと
+        // dirty チェックに引っかかるため、自前で外す。
+        const idx = tabs.findIndex((tt) => tt.id === orphan.id);
+        if (idx >= 0) {
+          const wasActive = activeTabId === orphan.id;
+          await disposeVirtualPathFor(orphan);
+          tabs = tabs.filter((tt) => tt.id !== orphan.id);
+          if (wasActive) {
+            if (tabs.length === 0) {
+              const fresh = makeEmptyTab();
+              tabs = [fresh];
+              activeTabId = fresh.id;
+            } else {
+              activeTabId = tabs[Math.max(0, idx - 1)].id;
+            }
+          }
+          schedulePersistTabs();
+        }
+      }
+      await refreshProjectTree();
+    } catch (e) {
+      setStatus(String(e));
+    }
   }
 
   function toggleProjectExpanded(p: string) {
@@ -1563,7 +1778,17 @@
             >
           {/if}
         </div>
-        <div class="project-body">
+        <div
+          class="project-body"
+          oncontextmenu={(e) => {
+            // 既にツリー行で停止されていなければ、ルートフォルダ自身を
+            // ターゲットにメニューを出す(空白部分での右クリック対応)。
+            if (!projectTree) return;
+            e.preventDefault();
+            openTreeContextMenu(e, projectTree);
+          }}
+          role="presentation"
+        >
           {#if projectTree && projectTree.children}
             <ProjectTree
               entries={projectTree.children}
@@ -1571,6 +1796,8 @@
               onOpenFile={selectFromTree}
               expanded={projectExpanded}
               onToggleExpanded={toggleProjectExpanded}
+              onContextMenu={openTreeContextMenu}
+              {gitStatus}
             />
           {:else if currentFolder}
             <div class="placeholder">{t("placeholder.loading")}</div>
@@ -1732,6 +1959,72 @@
       onCancel={onTemplateCancel}
     />
   {/if}
+
+  {#if treeMenu}
+    {@const isRoot = treeMenu.target.path === currentFolder}
+    <!-- 画面全体の透明オーバーレイで外側クリックを拾う(menu を閉じる) -->
+    <div
+      class="ctx-overlay"
+      onclick={closeTreeContextMenu}
+      onkeydown={(e) => e.key === "Escape" && closeTreeContextMenu()}
+      role="presentation"
+    ></div>
+    <div
+      class="ctx-menu"
+      style:left={`${treeMenu.x}px`}
+      style:top={`${treeMenu.y}px`}
+      role="menu"
+    >
+      <button class="ctx-item" onclick={handleNewFile}
+        >{t("project.newFile")}</button
+      >
+      <button class="ctx-item" onclick={handleNewFolder}
+        >{t("project.newFolder")}</button
+      >
+      {#if !isRoot}
+        <!-- ルートフォルダ自身のリネーム / 削除はうっかり事故の元なので
+             非表示にする。プロジェクトを移したい時は「フォルダを開く」を使う -->
+        <div class="ctx-sep"></div>
+        <button class="ctx-item" onclick={handleRename}
+          >{t("project.rename")}</button
+        >
+        <button class="ctx-item danger" onclick={handleDelete}
+          >{t("project.delete")}</button
+        >
+      {/if}
+    </div>
+  {/if}
+
+  {#if promptDialog}
+    <div class="prompt-overlay" role="presentation" onclick={cancelPrompt}></div>
+    <div class="prompt-dialog" role="dialog" aria-modal="true">
+      <div class="prompt-title">{promptDialog.title}</div>
+      <input
+        class="prompt-input"
+        type="text"
+        bind:value={promptInput}
+        placeholder={promptDialog.placeholder}
+        autofocus
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitPrompt();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            cancelPrompt();
+          }
+        }}
+      />
+      <div class="prompt-actions">
+        <button class="prompt-btn" onclick={cancelPrompt}
+          >{t("dialog.buttonCancel")}</button
+        >
+        <button class="prompt-btn primary" onclick={submitPrompt}
+          >{promptDialog.okLabel}</button
+        >
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -1747,6 +2040,114 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+  }
+
+  /* プロジェクトビューの右クリックメニュー */
+  .ctx-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: transparent;
+  }
+  .ctx-menu {
+    position: fixed;
+    z-index: 201;
+    min-width: 160px;
+    padding: 4px 0;
+    background: var(--bg-elevated-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+  .ctx-item {
+    display: block;
+    width: 100%;
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  .ctx-item:hover {
+    background: var(--bg-elevated-3);
+  }
+  .ctx-item.danger {
+    color: var(--status-error-strong);
+  }
+  .ctx-sep {
+    height: 1px;
+    margin: 4px 0;
+    background: var(--border);
+  }
+
+  /* 名前入力プロンプト(新規 / リネーム共通) */
+  .prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .prompt-dialog {
+    position: fixed;
+    z-index: 301;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 320px;
+    padding: 16px;
+    background: var(--bg-elevated-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    color: var(--text-primary);
+  }
+  .prompt-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin-bottom: 8px;
+  }
+  .prompt-input {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+  .prompt-input:focus {
+    outline: 1px solid var(--accent-strong);
+    outline-offset: -1px;
+  }
+  .prompt-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .prompt-btn {
+    padding: 6px 14px;
+    background: var(--bg-elevated-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .prompt-btn:hover {
+    background: var(--bg-elevated-1);
+  }
+  .prompt-btn.primary {
+    background: var(--accent-bg-subtle);
+    border-color: var(--accent-strong);
+    color: var(--text-strong);
   }
 
   .toolbar {

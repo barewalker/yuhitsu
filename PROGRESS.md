@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(リアルタイム preview 反映 / per-tab undo / 無題タブ preview / タブ永続化 / Ctrl+Tab + 中ボタン閉じ + 構文ハイライト暫定無効化)
+最終更新: 2026-05-02(プロジェクトビュー拡張: 右クリックメニュー / 新規・リネーム・削除 / git status 連携)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -189,7 +189,12 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] ツリーからのファイル切替:`.typ` はエディタで開く(dirty 時の確認込み、現在ファイルのハイライト)、それ以外(PDF / 画像 / 任意)は `openUrl` で OS デフォルトに流す
   - [x] サイドバー on/off + 幅リサイズ(`workspace.projectViewVisible` / `workspace.projectPaneRatio`)、`toggle-project-view` コマンド + Ctrl+Shift+E
   - [x] 既存設定への migration(`open-folder` / `toggle-project-view` を自動追加)
-- [ ] プロジェクトビューの拡張(右クリックメニュー、新規・リネーム・削除、git status 連携)
+- [x] **プロジェクトビューの拡張**(2026-05-02)
+  - 右クリックメニュー:行の上で出る自前 context menu(新規ファイル / 新規フォルダ / 名前変更 / 削除)。空白部分で右クリックするとルートフォルダに対するメニュー(リネーム / 削除はルートでは安全のため非表示)。row の oncontextmenu は stopPropagation してルートメニューに上書きされないようにする
+  - ファイル操作:Rust に `create_file` / `create_folder` / `rename_path` / `delete_path` コマンド追加(`/`、`\`、`..` を弾くトラバーサル対策込み)。リネーム時はタブ側の path も追従、削除時は対象を含むタブを自動クローズ
+  - 名前入力:自前モーダル(`<input>` + Enter / Escape / OK / Cancel)。VSCode 風のインライン編集は Phase 2 に持ち越し
+  - git status 連携:Rust の `git_status` コマンドで `git status --porcelain=v1 -z` を呼び、絶対パス → 1 文字 status code のマップを返す。ProjectTree で行に色 + 1 文字バッジ(?・M・A・D・R・U)、CSS 変数経由でテーマ追従。git repo 以外 / git CLI が無い環境でも黙って空マップを返してエラーにならない
+  - 保存後は軽量な `refreshGitStatus()` だけ呼んで、ツリー構造は再取得しない
 - [x] **タブ機能 + テキストファイル対応**(Sprint 3 中に氏の要望で追加、競合 Typstudio との比較で必要性が浮上)
   - [x] Tab 型(`{ id, path, content, dirty, cursorAnchor, cursorHead, scrollTop }`)、複数同時編集
   - [x] 既存タブ再利用(同じパスならそれを active に)/ 空タブ再利用(無題かつ未編集のタブは差し替え)/ 新規タブ追加

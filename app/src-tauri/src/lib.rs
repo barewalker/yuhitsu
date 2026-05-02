@@ -111,6 +111,184 @@ fn read_dir_recursive(path: &PathBuf, depth: usize) -> Result<Vec<DirEntry>, Str
     Ok(combined)
 }
 
+// ============================================================
+// プロジェクトビューからのファイル操作(右クリックメニュー)
+// ------------------------------------------------------------
+// 共通方針:
+//   - 既存パスを上書きしない(`exists` で先にチェック)
+//   - 失敗時はエラー文字列をフロントへ。toast 等でユーザに見せる前提
+//   - ディレクトリ作成は parents=true(create_dir_all)
+// ============================================================
+
+fn ensure_no_traversal(name: &str) -> Result<(), String> {
+    // 単一の名前(ファイル名 / フォルダ名)に "/", "\\", ".." が含まれて
+    // いると、親ディレクトリ脱出や別ディレクトリ書き込みになりうる。
+    // フロントの input から来た値を保険でガード。
+    if name.is_empty() {
+        return Err("name must not be empty".into());
+    }
+    if name.contains('/') || name.contains('\\') || name == ".." || name == "." {
+        return Err(format!("invalid name: {:?}", name));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn create_file(parent: String, name: String) -> Result<String, String> {
+    ensure_no_traversal(&name)?;
+    let path = PathBuf::from(&parent).join(&name);
+    if path.exists() {
+        return Err(format!("already exists: {}", path.display()));
+    }
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir)
+            .map_err(|e| format!("failed to ensure parent dir: {}", e))?;
+    }
+    fs::write(&path, "")
+        .map_err(|e| format!("failed to create file {}: {}", path.display(), e))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn create_folder(parent: String, name: String) -> Result<String, String> {
+    ensure_no_traversal(&name)?;
+    let path = PathBuf::from(&parent).join(&name);
+    if path.exists() {
+        return Err(format!("already exists: {}", path.display()));
+    }
+    fs::create_dir_all(&path)
+        .map_err(|e| format!("failed to create folder {}: {}", path.display(), e))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+fn rename_path(old_path: String, new_name: String) -> Result<String, String> {
+    ensure_no_traversal(&new_name)?;
+    let old = PathBuf::from(&old_path);
+    let parent = old
+        .parent()
+        .ok_or_else(|| format!("no parent for {}", old.display()))?;
+    let new = parent.join(&new_name);
+    if new == old {
+        // 名前変更なし(ユーザがそのまま Enter):成功扱いで何もしない
+        return Ok(old_path);
+    }
+    if new.exists() {
+        return Err(format!("already exists: {}", new.display()));
+    }
+    fs::rename(&old, &new)
+        .map_err(|e| format!("failed to rename {} -> {}: {}", old.display(), new.display(), e))?;
+    Ok(new.to_string_lossy().into_owned())
+}
+
+// ============================================================
+// プロジェクトビュー: git status 連携
+// ------------------------------------------------------------
+// `git status --porcelain=v1 -z` の出力をパースして、ファイル毎の
+// 状態を返す。git repo でない場合は空マップを返す(エラーにしない、
+// プロジェクトビューは git 非依存で動かしたい)。
+//
+// porcelain=v1 のフォーマット:各レコードは "XY <path>\0" または
+// "XY <new>\0<old>\0"(rename / copy 時)。XY は 2 文字の status code。
+//   X = index 側(staged)
+//   Y = work tree 側(unstaged)
+// 1 文字目が " "(space)なら index 変更なし、? は untracked。
+//
+// フロント側で扱いやすいよう、絶対パス → status code 1 文字の
+// マップに正規化する(M / A / ? / D / R / U)。
+// ============================================================
+
+#[derive(Serialize)]
+struct GitStatus {
+    is_repo: bool,
+    // key: 絶対パス、value: 1 文字 status code
+    entries: std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+fn git_status(folder: String) -> Result<GitStatus, String> {
+    let mut result = GitStatus {
+        is_repo: false,
+        entries: std::collections::HashMap::new(),
+    };
+    let dir = PathBuf::from(&folder);
+    if !dir.is_dir() {
+        return Ok(result);
+    }
+    // git status --porcelain=v1 -z は NUL 区切り + 確定的フォーマット。
+    let output = match Command::new("git")
+        .current_dir(&dir)
+        .args(["status", "--porcelain=v1", "-z"])
+        .output()
+    {
+        Ok(o) => o,
+        // git コマンドが無い環境はエラーにせず空マップ
+        Err(_) => return Ok(result),
+    };
+    if !output.status.success() {
+        // repo でない場合はここに来る(exit code 128 等)。errcode は捨てる
+        return Ok(result);
+    }
+    result.is_repo = true;
+
+    // -z 出力を NUL で分割。rename/copy 時は次レコードに old name が来るが
+    // Yuhitsu は new path だけ見れば十分なので old は読み飛ばす。
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut iter = stdout.split('\0');
+    while let Some(rec) = iter.next() {
+        if rec.is_empty() {
+            continue;
+        }
+        if rec.len() < 3 {
+            continue;
+        }
+        let bytes = rec.as_bytes();
+        let x = bytes[0] as char;
+        let y = bytes[1] as char;
+        // " <path>" の path 部分は 3 バイト目以降
+        let path = &rec[3..];
+        // rename / copy('R' / 'C')は old name が次レコードに来るので読み飛ばす
+        if x == 'R' || x == 'C' {
+            let _ = iter.next();
+        }
+        // フロントが扱う 1 文字 status を決める。優先度:
+        //   ?? (untracked) → "?"
+        //   何かしら index 変更あり → X
+        //   work tree 変更あり → Y
+        // それ以外は最初の非空白を採用。
+        let code = if x == '?' && y == '?' {
+            '?'
+        } else if x != ' ' && x != '?' {
+            x
+        } else if y != ' ' && y != '?' {
+            y
+        } else {
+            x
+        };
+        let abs = dir.join(path);
+        result
+            .entries
+            .insert(abs.to_string_lossy().into_owned(), code.to_string());
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn delete_path(path: String) -> Result<(), String> {
+    let buf = PathBuf::from(&path);
+    if !buf.exists() {
+        return Err(format!("not found: {}", buf.display()));
+    }
+    if buf.is_dir() {
+        fs::remove_dir_all(&buf)
+            .map_err(|e| format!("failed to remove dir {}: {}", buf.display(), e))?;
+    } else {
+        fs::remove_file(&buf)
+            .map_err(|e| format!("failed to remove file {}: {}", buf.display(), e))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn list_directory(path: String) -> Result<DirEntry, String> {
     let buf = PathBuf::from(&path);
@@ -737,6 +915,11 @@ pub fn run() {
             open_file,
             save_file,
             list_directory,
+            create_file,
+            create_folder,
+            rename_path,
+            delete_path,
+            git_status,
             start_preview,
             stop_preview,
             preview_update_memory,

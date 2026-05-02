@@ -42,7 +42,9 @@
     "discardTabSaved": "There are unsaved changes. Save?",
     "exitApp": "There are unsaved changes. Quit anyway?",
     "buttonSave": "Save",
-    "buttonDontSave": "Don't save"
+    "buttonDontSave": "Don't save",
+    "buttonOk": "OK",
+    "buttonCancel": "Cancel"
   },
   "placeholder": {
     "loading": "Loading…",
@@ -64,7 +66,16 @@
     "change": "Change",
     "refresh": "Refresh",
     "refreshTooltip": "Reload",
-    "openHint": "Press \"Open folder\" to choose a project directory."
+    "openHint": "Press \"Open folder\" to choose a project directory.",
+    "newFile": "New file",
+    "newFolder": "New folder",
+    "rename": "Rename",
+    "delete": "Delete",
+    "create": "Create",
+    "newFileTitle": "New file name",
+    "newFolderTitle": "New folder name",
+    "renameTitle": "New name",
+    "deleteConfirm": "Delete \"{name}\"? This cannot be undone."
   },
   "preset": {
     "standard": "Standard",

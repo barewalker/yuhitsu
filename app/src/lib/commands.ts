@@ -347,7 +347,9 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     id: "toggle-project-view",
     labelKey: "command.toggleProjectView",
     icon: PanelLeft,
-    defaultKey: "Mod-Shift-e",
+    // Ctrl+Shift+E は WebKitGTK が呑み込むため、IntelliJ 流儀の Ctrl+1 を
+    // 代替に併設する(将来 Webview の制約が解ければ自動で Shift+E も効く)。
+    defaultKey: ["Mod-Shift-e", "Mod-1"],
     needsEditor: false,
     run: (ctx) => ctx.toggleProjectView(),
   },
