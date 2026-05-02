@@ -531,6 +531,12 @@
   let path = $derived<string | null>(getActiveTab()?.path ?? null);
   let content = $derived(getActiveTab()?.content ?? "");
   let dirty = $derived(getActiveTab()?.dirty ?? false);
+  // Editor に渡す filePath は実 path 優先、なければ仮想 path(無題タブで
+  // 仮想 .typ を作っている場合)。LSP 機能(補完 / 診断 / hover)は filePath
+  // が無いと一切動かないので、無題タブでも virtualPath を渡して有効化する。
+  let editorFilePath = $derived<string | null>(
+    getActiveTab()?.path ?? getActiveTab()?.virtualPath ?? null,
+  );
   // タブ切替時に Editor.svelte が view.setState で復元するための state。
   // ファイル open / 起動直後のタブは null、切替前のタブには captureActiveTabState
   // で設定済み。Editor 側で 1 度適用したら親が同じ参照を渡している間は再適用しない。
@@ -2145,7 +2151,7 @@
             mode={editorMode}
             languageMode={isTypstTab(getActiveTab()) ? "typst" : "plain"}
             {lspClient}
-            filePath={path}
+            filePath={editorFilePath}
             onChange={onEditorChange}
             onCursorChange={(info) => (cursor = info)}
             onReady={onEditorReady}

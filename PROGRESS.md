@@ -574,6 +574,17 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - 残:無題タブ(path 無し)はまだ対象外。仮想パス(例 `__yuhitsu_unsaved_<tabId>__.typ`)を割り当てて memory file 化すれば対応可だが、preview の subprocess 起動引数に実在ファイルが要る制約があり別タスク
 - 動作確認:**氏に GUI で確認してもらう必要あり**。型チェック(`pnpm check`)・Rust ビルド(`cargo check`)は通過
 
+### 2026-05-02: 無題タブで LSP 機能(hover / 補完 / 診断)が無効になる bug 修正
+- **症状**(氏報告):業務報告書テンプレを当てた無題タブで、`#text` 等の組み込み関数にマウスを乗せても hover が出ない、補完(`#l` でポップアップ)も出ない、診断(赤波線)も出ない。一方 syntax highlight は動作している
+- **真因**:Editor.svelte の `filePath` prop に渡していた値が `path = $derived(getActiveTab()?.path ?? null)` で、**無題タブでは null**。`lspExtension(client, null)` は `if (!client || !file) return [];` のガードで **空 extension** を返し、`languageServerSupport` 自体が組み込まれない → hover / 補完 / 診断が一切動かない
+- **歴史的背景**:2026-05-02 の「無題タブで preview を有効化」対応で `tab.virtualPath` を導入し、preview / memory file 経路は `ensurePreviewablePath` で virtualPath を使うようにしたが、**Editor.svelte の filePath prop だけはそのまま `path`(= tab.path)を渡し続けていた** ため、無題タブでは LSP が無効化される状態が温存されていた。当時 hover の動作確認は file タブで行っていたため発覚しなかった
+- **対策**:`editorFilePath = $derived(getActiveTab()?.path ?? getActiveTab()?.virtualPath ?? null)` を追加し、Editor の `filePath` prop に渡すよう変更。これで無題タブでも LSP に正しい URI が伝わる
+- **切り分け経路**:
+  1. CSS が hover を消していると仮定 → CSS 撤去 → 改善せず
+  2. tooltip parent が `.app { overflow: hidden }` でクリップされていると仮定 → `tooltips({ parent: document.body })` 追加 → 改善せず
+  3. 最終的に `dlog` でフロント状態をダンプ → `lspClient=true filePath=null` を発見 → 一発で原因判明
+- 学び:LSP のような複合 extension は **「extension が組み込まれていない」と「extension が動作しているが応答が無い」が見分けにくい**。フロント側ログを早く出す方が遠回りしない
+
 ### 2026-05-02: 全体スクロール bug 修正(エディタ高さ伝達の落とし穴)
 - **症状**(氏報告):業務報告書テンプレを当てると、エディタがステータスバーを突き破り、ツールバー / 両サイド / ステータスバー含めて Yuhitsu 全体が縦スクロールしてしまう。プロジェクトビュー非表示でも同じ
 - **真因**:`+page.svelte` の `.editor-pane :global(.cm-host) { flex: 1; min-height: 0; }` が、Editor.svelte 内の `.cm-host { height: 100%; }` を **CSS specificity で上書き** し、`height: 100%` が消えていた。これは元々の落とし穴で、エディタ本文が短い間は CodeMirror が contentHeight 駆動で表示するだけで露呈しなかった。今回業務報告書を `#let business-report(...) = {...}` 形式に書き換えて本文を長くしたら、cm-editor が内容ベースで膨張 → .editor-pane → .edit-preview-row → .workspace が連鎖的に伸び、`.app { height: 100vh }` だけでは body スクロールを封じられず全体スクロール発生
