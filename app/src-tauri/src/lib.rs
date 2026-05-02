@@ -672,6 +672,43 @@ fn kill_lingering_tinymist() {
     }
 }
 
+// ============================================================
+// タブ状態の永続化
+// ------------------------------------------------------------
+// 開いていたタブ一覧(file タブのパス + 無題タブの content / dirty)を
+// `<app_data_dir>/tabs.json` に保存する。settings.json は氏が直接編集する
+// 設計なので、長文 content が混ざらないよう別ファイルに分離する。
+// 保存・読み込みのスキーマはフロント側が JSON.stringify / JSON.parse する
+// 前提で、Rust は文字列をそのまま read/write するだけ(構造を関知しない)。
+// ============================================================
+
+fn tab_state_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app_data_dir: {}", e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("failed to create data dir {}: {}", dir.display(), e))?;
+    Ok(dir.join("tabs.json"))
+}
+
+#[tauri::command]
+fn save_tab_state(app: AppHandle, payload: String) -> Result<(), String> {
+    let path = tab_state_path(&app)?;
+    fs::write(&path, payload).map_err(|e| format!("failed to save tab state: {}", e))
+}
+
+// 戻り値: 保存ファイルが無ければ空文字列。フロント側はこれを「未保存」と
+// 解釈してデフォルト(空タブ 1 枚)で起動する。
+#[tauri::command]
+fn load_tab_state(app: AppHandle) -> Result<String, String> {
+    let path = tab_state_path(&app)?;
+    if !path.exists() {
+        return Ok(String::new());
+    }
+    fs::read_to_string(&path).map_err(|e| format!("failed to read tab state: {}", e))
+}
+
 #[tauri::command]
 fn get_settings_path(app: AppHandle) -> Result<String, String> {
     let dir = app
@@ -711,7 +748,9 @@ pub fn run() {
             dev_log,
             get_settings_path,
             prepare_untitled_path,
-            cleanup_untitled_path
+            cleanup_untitled_path,
+            save_tab_state,
+            load_tab_state
         ])
         .setup(|app| {
             // dev での強制終了などで孤児になった tinymist プロセスを

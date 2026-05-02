@@ -7,6 +7,8 @@ import type { LucideIcon } from "@lucide/svelte";
 import Asterisk from "@lucide/svelte/icons/asterisk";
 import Bold from "@lucide/svelte/icons/bold";
 import BookOpen from "@lucide/svelte/icons/book-open";
+import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -54,6 +56,8 @@ export const COMMAND_IDS = [
   "save",
   "save-as",
   "close-tab",
+  "next-tab",
+  "prev-tab",
   "export-pdf",
   "bold",
   "italic",
@@ -104,6 +108,8 @@ export interface CommandContext {
   newTab: () => void | Promise<void>;
   newFromTemplate: () => void | Promise<void>;
   closeActiveTab: () => void | Promise<void>;
+  nextTab: () => void | Promise<void>;
+  prevTab: () => void | Promise<void>;
   openSettings: () => void | Promise<void>;
 }
 
@@ -115,8 +121,10 @@ export interface CommandDef {
   icon: LucideIcon;
   /** ボタンに当てる装飾クラス。装飾系は `fmt` 等 */
   buttonClass?: string;
-  /** デフォルトキーバインド。"Mod-b" 形式(Mod は Ctrl/Cmd) */
-  defaultKey?: string;
+  /** デフォルトキーバインド。"Mod-b" 形式(Mod は Ctrl/Cmd)。
+   * 同じコマンドに複数キーを bind したい時は配列で渡す。
+   * 表示(ホバーヒント等)では先頭のキーを優先。 */
+  defaultKey?: string | string[];
   /** EditorView を必要とするか。null のとき disabled / キーは無視 */
   needsEditor: boolean;
   // 戻り値は使わないので unknown を許容(save / saveAs が boolean を返す等)
@@ -191,6 +199,27 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     defaultKey: "Mod-w",
     needsEditor: false,
     run: (ctx) => ctx.closeActiveTab(),
+  },
+  "next-tab": {
+    id: "next-tab",
+    labelKey: "command.nextTab",
+    icon: ChevronRight,
+    // Ctrl+Tab はブラウザ流儀(Yuhitsu の Tauri WebView でも動作する)、
+    // Ctrl+PageDown は VSCode 流儀のフォールバック。
+    defaultKey: ["Mod-Tab", "Mod-PageDown"],
+    needsEditor: false,
+    run: (ctx) => ctx.nextTab(),
+  },
+  "prev-tab": {
+    id: "prev-tab",
+    labelKey: "command.prevTab",
+    icon: ChevronLeft,
+    // Ctrl+Shift+Tab は WebKitGTK の focus traversal 予約で JS まで届かない
+    // ため、Ctrl+PageUp が実用上のメイン。Ctrl+Shift+Tab も将来 Webview の
+    // 仕様変更で動くようになった時のために残しておく。
+    defaultKey: ["Mod-Shift-Tab", "Mod-PageUp"],
+    needsEditor: false,
+    run: (ctx) => ctx.prevTab(),
   },
   "export-pdf": {
     id: "export-pdf",

@@ -1,6 +1,6 @@
 # Yuhitsu — 進捗管理
 
-最終更新: 2026-05-02(リアルタイム preview 反映 / per-tab undo history / 無題タブ preview 対応 + codemirror-lang-typst の編集中 panic で構文ハイライトを暫定無効化)
+最終更新: 2026-05-02(リアルタイム preview 反映 / per-tab undo / 無題タブ preview / タブ永続化 / Ctrl+Tab + 中ボタン閉じ + 構文ハイライト暫定無効化)
 現在のフェーズ: **Phase 1 — Sprint 3 進行中(UI 文字列 i18n 化完了、フォーム型テンプレ簡素版が次の差別化ポイント)**
 
 ---
@@ -198,9 +198,9 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - [x] ツールバー:`new-tab`(Ctrl+T)/ `close-tab`(Ctrl+W)を追加、各タブに ✕ ボタンと「+」新規ボタン
   - [x] テキストファイル全般を開けるよう `openFile` のフィルタ撤廃、ツリーからは `.typ` / `.md` / `.csv` 等のテキスト系はタブで、バイナリは `openUrl` で OS デフォルト
   - [x] Typst 以外のファイルでは構文ハイライトを plain に、LSP / preview / PDF 機能を無効化(`Editor.svelte` に `languageMode` Compartment 追加)
-- [ ] タブの永続化(次回起動時に開いていたタブを復元)
+- [x] **タブの永続化(hot exit)**(2026-05-02、`<app_data_dir>/tabs.json` に file タブの path・無題タブの content・cursor/scroll・active index を保存。300ms debounce で都度書き出し、終了時に flush。復元時は file は再 open、無題は新仮想 path に content を書き込んで dirty=true で復活)
 - [x] タブの D&D 並び替え(HTML5 Drag and Drop API、依存追加なし、ドラッグ中は半透明 + ドロップ先に左ボーダー)
-- [ ] Ctrl+Tab 切替 / 中ボタン閉じ(後回し)
+- [x] **Ctrl+Tab / Ctrl+Shift+Tab / 中ボタンクリックでのタブ操作**(2026-05-02、`next-tab` / `prev-tab` コマンドをカタログ追加。WebKitGTK が Ctrl+Shift+Tab を focus traversal で消費する制約のため、`Ctrl+PageUp` / `Ctrl+PageDown`(VSCode 流儀)を併設。`CommandDef.defaultKey` を `string \| string[]` に型拡張して 1 コマンド複数キーバインドに対応。中ボタンはタブ pointerdown で button=1 を捕まえて closeTab)
 - [x] **テーマ機能(自動 / ライト / ダーク)**(Sprint 3 中に氏の要望で追加、Phase 2 予定の前倒し)
   - [x] 全 UI 色を CSS 変数化(`app.html` の `:root` に 27 種、背景・ボーダー・文字・アクセント・ステータス・Syntax)
   - [x] `:root[data-theme="light"]` にライトテーマ(One Light 風)を定義、`color-scheme` も追従

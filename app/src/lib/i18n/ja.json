@@ -10,6 +10,8 @@
     "save": "保存",
     "saveAs": "名前を付けて保存",
     "closeTab": "タブを閉じる",
+    "nextTab": "次のタブ",
+    "prevTab": "前のタブ",
     "exportPdf": "PDF 出力",
     "bold": "太字",
     "italic": "斜体",

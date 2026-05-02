@@ -26,6 +26,11 @@
   import { pathToFileUri, startLspSession, type LspSession } from "$lib/lsp";
   import type { EditorView } from "@codemirror/view";
   import type { EditorState } from "@codemirror/state";
+  import {
+    saveTabState,
+    loadTabState,
+    type PersistedTab,
+  } from "$lib/tab-persist";
   import { insertBibliography, insertImage } from "$lib/editor-commands";
   import { listDirectory, type DirEntry } from "$lib/project";
   import ProjectTree from "$lib/ProjectTree.svelte";
@@ -118,6 +123,122 @@
     } else {
       delete document.documentElement.dataset.theme;
     }
+  }
+
+  // タブ状態の永続化:操作の度に小さな debounce 後で書き出す。
+  // 開いていたタブの順序・active 位置・無題タブの本文を tabs.json に
+  // 保存し、次回起動時の hot exit 復元に使う。
+  let persistTabsTimer: ReturnType<typeof setTimeout> | null = null;
+  const TAB_PERSIST_DEBOUNCE_MS = 300;
+
+  function schedulePersistTabs() {
+    if (persistTabsTimer !== null) clearTimeout(persistTabsTimer);
+    persistTabsTimer = setTimeout(() => {
+      persistTabsTimer = null;
+      void persistTabs();
+    }, TAB_PERSIST_DEBOUNCE_MS);
+  }
+
+  // 永続化に乗せる per-tab スナップショット。
+  // active タブは captureActiveTabState を先に呼び view.state を反映させてから
+  // 取り出すので、ここでは tab に控えてあるフィールドをそのまま使う。
+  async function persistTabs(): Promise<void> {
+    captureActiveTabState();
+    const out: PersistedTab[] = [];
+    let activeIndex = -1;
+    for (const tab of tabs) {
+      const isActive = tab.id === activeTabId;
+      if (tab.path) {
+        // 実ファイルタブは path のみ(content はディスクから読み直す)。
+        out.push({
+          kind: "file",
+          path: tab.path,
+          cursorAnchor: tab.cursorAnchor,
+          cursorHead: tab.cursorHead,
+          scrollTop: tab.scrollTop,
+        });
+      } else {
+        // 無題タブは中身が空ならスキップ(復元する価値が無い)。
+        if (tab.content.length === 0) continue;
+        out.push({
+          kind: "untitled",
+          content: tab.content,
+          cursorAnchor: tab.cursorAnchor,
+          cursorHead: tab.cursorHead,
+          scrollTop: tab.scrollTop,
+        });
+      }
+      if (isActive) activeIndex = out.length - 1;
+    }
+    await saveTabState({ tabs: out, activeIndex });
+  }
+
+  // 起動時にタブ状態を復元する。返り値は「復元が走ったか」(走らなかった
+  // 時はデフォルトの空タブ 1 枚で起動済みなので何もしない)。
+  async function restoreTabs(): Promise<boolean> {
+    const state = await loadTabState();
+    if (!state || state.tabs.length === 0) return false;
+
+    const restored: Tab[] = [];
+    for (const persisted of state.tabs) {
+      try {
+        if (persisted.kind === "file") {
+          const doc = await invoke<FileDoc>("open_file", { path: persisted.path });
+          restored.push({
+            id: newTabId(),
+            path: doc.path,
+            content: doc.content,
+            dirty: false,
+            cursorAnchor: persisted.cursorAnchor,
+            cursorHead: persisted.cursorHead,
+            scrollTop: persisted.scrollTop,
+            editorState: null,
+            virtualPath: null,
+          });
+        } else {
+          const id = newTabId();
+          // 無題タブは新しい仮想ファイルを作って content を書き込む。
+          // 古い仮想ファイルは tab.id ベースで作られていたが起動毎に
+          // ID が変わるので、復元時は新規割り当てになる。
+          let virtualPath: string | null = null;
+          try {
+            virtualPath = await invoke<string>("prepare_untitled_path", {
+              tabId: id,
+            });
+            await invoke("save_file", {
+              path: virtualPath,
+              content: persisted.content,
+            });
+          } catch (e) {
+            console.warn("[tabs] untitled restore (virtual file) failed:", e);
+          }
+          restored.push({
+            id,
+            path: null,
+            content: persisted.content,
+            // 復元時は「未保存の編集が残っていた」状態なので dirty=true
+            dirty: true,
+            cursorAnchor: persisted.cursorAnchor,
+            cursorHead: persisted.cursorHead,
+            scrollTop: persisted.scrollTop,
+            editorState: null,
+            virtualPath,
+          });
+        }
+      } catch (e) {
+        // 個別タブの復元失敗(ファイル消失など)は skip して続行
+        console.warn("[tabs] restore one tab failed:", e);
+      }
+    }
+
+    if (restored.length === 0) return false;
+
+    // 既存の初期空タブの仮想ファイルを掃除してから入れ替え
+    for (const t of tabs) await disposeVirtualPathFor(t);
+    tabs = restored;
+    const idx = Math.min(Math.max(state.activeIndex, 0), restored.length - 1);
+    activeTabId = restored[idx]?.id ?? null;
+    return true;
   }
 
   // 設定ファイル(settings.json)を外部エディタで書き換えた後、
@@ -276,6 +397,13 @@
   const DRAG_THRESHOLD_PX = 5;
 
   function onTabPointerDown(e: PointerEvent, id: TabId) {
+    // 中クリック(button=1)はタブ閉じ(ブラウザ流儀)。pointerdown 時点で
+    // 即発火させる(pointerup を待たずに)— ユーザ体感が速い方が良い
+    if (e.button === 1) {
+      e.preventDefault();
+      void closeTab(id);
+      return;
+    }
     if (e.button !== 0) return;
     // タブのテキストがドラッグで選択されるのを防ぐ。WebKitGTK 上では
     // CSS の user-select: none だけでは抑制されないため pointerdown で
@@ -342,6 +470,7 @@
     const [moved] = next.splice(srcIdx, 1);
     next.splice(dstIdx, 0, moved);
     tabs = next;
+    schedulePersistTabs();
   }
 
   // 既存コードに最小の変更で乗るよう、active tab 由来の値を path/content/dirty
@@ -499,6 +628,7 @@
       // 無題タブから初めて保存した場合、仮想ファイルを掃除して preview を
       // 新しい実 path に乗せ替える。
       await disposeVirtualPathFor(tab);
+      schedulePersistTabs();
       clearStatus();
       if (isNewPath) {
         if (isTypstPath(selected)) {
@@ -598,6 +728,9 @@
     tab.dirty = true;
     // ディスクに書かずに preview だけ最新にする(debounce 経由)
     schedulePreviewMemoryUpdate();
+    // 無題タブの本文を hot exit 用に永続化(file タブは content を
+    // 書かないが、active 位置の保存のためにも一応呼ぶ)
+    schedulePersistTabs();
   }
 
   function onEditorReady(view: EditorView) {
@@ -641,6 +774,7 @@
     activeTabId = targetId;
     const tab = getActiveTab();
     if (!tab) return;
+    schedulePersistTabs();
     // doc / カーソル / scroll は Editor.svelte 側の $effect が反映する。
     // Typst タブなら preview / LSP、それ以外は停止しエディタだけ使う。
     if (isTypstTab(tab)) {
@@ -699,6 +833,7 @@
         tabs = [...tabs, tab];
         activeTabId = tab.id;
       }
+      schedulePersistTabs();
       clearStatus();
       const newActive = getActiveTab();
       if (isTypstTab(newActive)) {
@@ -716,11 +851,30 @@
     }
   }
 
+  // タブ切替のコマンド経由エントリポイント。Ctrl+Tab / Ctrl+Shift+Tab で
+  // 次 / 前のタブに移動。両端は巡回(VSCode と同じ流儀)。
+  async function nextTab() {
+    if (tabs.length < 2 || !activeTabId) return;
+    const idx = tabs.findIndex((t) => t.id === activeTabId);
+    if (idx < 0) return;
+    const next = tabs[(idx + 1) % tabs.length];
+    await switchTab(next.id);
+  }
+
+  async function prevTab() {
+    if (tabs.length < 2 || !activeTabId) return;
+    const idx = tabs.findIndex((t) => t.id === activeTabId);
+    if (idx < 0) return;
+    const next = tabs[(idx - 1 + tabs.length) % tabs.length];
+    await switchTab(next.id);
+  }
+
   async function addEmptyTab() {
     captureActiveTabState();
     const tab = makeEmptyTab();
     tabs = [...tabs, tab];
     activeTabId = tab.id;
+    schedulePersistTabs();
     // doc / カーソル / scroll は Editor.svelte 側の $effect が反映する。
     // 無題タブも Typst として扱うので、仮想ファイルを準備して preview / LSP
     // を起動する(空ドキュメントの preview が表示される)。
@@ -766,6 +920,7 @@
     const closingTab = tabs[idx];
     if (closingTab) await disposeVirtualPathFor(closingTab);
     tabs = tabs.filter((t) => t.id !== targetId);
+    schedulePersistTabs();
     if (tabs.length === 0) {
       // 全部閉じたら空タブを 1 枚自動で生成(ようこそ画面相当)。
       // 無題タブは Typst 機能の対象なので仮想ファイル準備 + preview/LSP 起動。
@@ -806,6 +961,8 @@
       closeActiveTab: () => {
         if (activeTabId) closeTab(activeTabId);
       },
+      nextTab,
+      prevTab,
       openSettings,
     };
   }
@@ -868,6 +1025,7 @@
       tabs = [...tabs, tab];
       activeTabId = tab.id;
     }
+    schedulePersistTabs();
     templateDialogOpen = false;
     markFirstRunDone();
     clearStatus();
@@ -1039,8 +1197,19 @@
     await def.run(commandContext());
   }
 
-  function effectiveKey(id: CommandId): string | undefined {
-    return keybindings[id] ?? COMMANDS[id].defaultKey;
+  // コマンドに割り当てられているキーバインド一覧を返す。同じコマンドに
+  // 複数キーを bind するケース(Ctrl+Tab と Ctrl+PageDown を両方など)に
+  // 対応するため常に配列を返す。
+  // override(設定で書き換えた値)は単一 string のみ受ける(配列で書き換える
+  // のは Phase 2 の設定 UI で対応予定)。override が入っていれば
+  // デフォルトキー全体を上書きする。
+  function effectiveKeys(id: CommandId): string[] {
+    const override = keybindings[id];
+    if (typeof override === "string" && override.length > 0) return [override];
+    const def = COMMANDS[id].defaultKey;
+    if (Array.isArray(def)) return def;
+    if (typeof def === "string") return [def];
+    return [];
   }
 
   // "Mod-Shift-b" 形式のキー指定を表示用 ("Ctrl+Shift+B") に整える。
@@ -1066,9 +1235,10 @@
 
   function buttonTitle(id: CommandId): string {
     const def = COMMANDS[id];
-    const key = effectiveKey(id);
+    const keys = effectiveKeys(id);
     const label = t(def.labelKey);
-    return key ? `${label} (${displayKey(key)})` : label;
+    // ホバーヒントは先頭のキーだけ出す(複数あっても 1 個だけ表示で十分)
+    return keys.length > 0 ? `${label} (${displayKey(keys[0])})` : label;
   }
 
   function isImagePath(p: string): boolean {
@@ -1202,9 +1372,9 @@
     // 修飾キーを伴わないキー入力はエディタ本体に渡す(IME / vim 等)
     if (!e.ctrlKey && !e.metaKey && !e.altKey) return;
     for (const id of COMMAND_IDS) {
-      const key = effectiveKey(id);
-      if (!key) continue;
-      if (!matchKey(e, key)) continue;
+      const keys = effectiveKeys(id);
+      if (keys.length === 0) continue;
+      if (!keys.some((k) => matchKey(e, k))) continue;
       const def = COMMANDS[id];
       // editor を必要とするコマンドは view が無いときパススルー。
       // これにより vim Normal モードのデフォルトキー(Ctrl+B 等)も
@@ -1226,6 +1396,7 @@
       unlisten = await win.onCloseRequested(async (event) => {
         if (!dirty) {
           // dirty でなくても preview / LSP の subprocess は止めたい
+          await persistTabs();
           await stopPreview();
           await stopLspSession();
           return;
@@ -1237,6 +1408,8 @@
           kind: "warning",
         });
         if (ok) {
+          // hot exit のため、無題タブの未保存内容を含めて最終 flush
+          await persistTabs();
           await stopPreview();
           await stopLspSession();
           await win.destroy();
@@ -1265,12 +1438,23 @@
         if (currentFolder) {
           await loadProjectTree(currentFolder);
         }
-        // 初回起動時のみテンプレ選択ダイアログを自動表示。それ以外は
-        // 起動直後の無題タブで preview / LSP を立ち上げる(空ドキュメント
-        // でも preview ペインに何かが映っている方が体験として良い)。
-        if (!firstRunDone) {
+        // 起動時のタブ状態を復元(hot exit 経由)。前回開いていたファイル
+        // タブと無題タブを再生する。復元できれば templateDialog は出さない。
+        const restored = await restoreTabs();
+        if (restored) {
+          const active = getActiveTab();
+          if (active && isTypstTab(active)) {
+            const target = await ensurePreviewablePath(active);
+            if (target) {
+              void Promise.all([startPreview(target), ensureLspFor(target)]);
+            }
+          }
+        } else if (!firstRunDone) {
+          // 初回起動はテンプレ選択ダイアログを自動表示
           templateDialogOpen = true;
         } else {
+          // 復元対象なし(全タブ閉じた状態で終了した、など)。デフォルト
+          // 空タブで preview を立ち上げる。
           const active = getActiveTab();
           if (active && isTypstTab(active)) {
             const target = await ensurePreviewablePath(active);

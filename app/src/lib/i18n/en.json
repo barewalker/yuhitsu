@@ -10,6 +10,8 @@
     "save": "Save",
     "saveAs": "Save as",
     "closeTab": "Close tab",
+    "nextTab": "Next tab",
+    "prevTab": "Previous tab",
     "exportPdf": "Export PDF",
     "bold": "Bold",
     "italic": "Italic",
