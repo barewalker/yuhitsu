@@ -31,6 +31,7 @@
     "bibliography": "参考文献ファイルを挿入",
     "toggleProjectView": "プロジェクトビュー表示切替",
     "togglePreview": "プレビュー表示切替",
+    "toggleSidebarMode": "サイドバーレイアウト切替(分割 / タブ)",
     "openSettings": "設定ファイルを開く",
     "openKeybindings": "キーバインド設定",
     "openToolbarEdit": "ツールバー編集"

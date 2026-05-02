@@ -11,6 +11,7 @@ import ChevronLeft from "@lucide/svelte/icons/chevron-left";
 import ChevronRight from "@lucide/svelte/icons/chevron-right";
 import Keyboard from "@lucide/svelte/icons/keyboard";
 import LayoutGrid from "@lucide/svelte/icons/layout-grid";
+import LayoutPanelLeft from "@lucide/svelte/icons/layout-panel-left";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -79,6 +80,7 @@ export const COMMAND_IDS = [
   "bibliography",
   "toggle-project-view",
   "toggle-preview",
+  "toggle-sidebar-mode",
   "open-settings",
   "open-keybindings",
   "open-toolbar-edit",
@@ -109,6 +111,7 @@ export interface CommandContext {
   pickAndInsertBibliography: () => void | Promise<void>;
   togglePreview: () => void | Promise<void>;
   toggleProjectView: () => void | Promise<void>;
+  toggleSidebarMode: () => void | Promise<void>;
   newTab: () => void | Promise<void>;
   newFromTemplate: () => void | Promise<void>;
   closeActiveTab: () => void | Promise<void>;
@@ -366,6 +369,15 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     defaultKey: "Mod-Shift-p",
     needsEditor: false,
     run: (ctx) => ctx.togglePreview(),
+  },
+  "toggle-sidebar-mode": {
+    id: "toggle-sidebar-mode",
+    labelKey: "command.toggleSidebarMode",
+    icon: LayoutPanelLeft,
+    // 頻繁には切替えないコマンドなので default キーは付与しない。
+    // 必要なら設定 UI で自分で割り当てる。
+    needsEditor: false,
+    run: (ctx) => ctx.toggleSidebarMode(),
   },
   "open-settings": {
     id: "open-settings",

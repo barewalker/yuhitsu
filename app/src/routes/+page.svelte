@@ -1045,6 +1045,7 @@
       pickAndInsertBibliography,
       togglePreview,
       toggleProjectView,
+      toggleSidebarMode,
       newTab: addEmptyTab,
       newFromTemplate: openTemplateDialog,
       closeActiveTab: () => {
@@ -1145,6 +1146,17 @@
 
   function togglePreview() {
     previewVisible = !previewVisible;
+    persistWorkspace();
+  }
+
+  // サイドバーレイアウトを α (split) と γ (tabs) で切替える。tabs に
+  // した時に「Project」「Form」のどちらが見えるかは sidebarActiveTab に
+  // 従う(直前に Project セクションを使っていたら project、フォーム編集中
+  // なら form のまま)。プロジェクトビュー自体が非表示なら表示も同時に on
+  // にする(切替えた時に何も見えないと意図不明になるため)。
+  function toggleSidebarMode() {
+    sidebarMode = sidebarMode === "split" ? "tabs" : "split";
+    if (!projectViewVisible) projectViewVisible = true;
     persistWorkspace();
   }
 
