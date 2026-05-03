@@ -13,6 +13,7 @@ import Keyboard from "@lucide/svelte/icons/keyboard";
 import LayoutGrid from "@lucide/svelte/icons/layout-grid";
 import LayoutPanelLeft from "@lucide/svelte/icons/layout-panel-left";
 import Command from "@lucide/svelte/icons/command";
+import Info from "@lucide/svelte/icons/info";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -86,6 +87,7 @@ export const COMMAND_IDS = [
   "open-keybindings",
   "open-toolbar-edit",
   "open-command-palette",
+  "open-about",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -123,6 +125,7 @@ export interface CommandContext {
   openKeybindings: () => void | Promise<void>;
   openToolbarEdit: () => void | Promise<void>;
   openCommandPalette: () => void | Promise<void>;
+  openAbout: () => void | Promise<void>;
 }
 
 export interface CommandDef {
@@ -420,10 +423,92 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: false,
     run: (ctx) => ctx.openCommandPalette(),
   },
+  "open-about": {
+    id: "open-about",
+    labelKey: "command.openAbout",
+    icon: Info,
+    needsEditor: false,
+    run: (ctx) => ctx.openAbout(),
+  },
 };
 
 // ツールバー上の項目。コマンド ID か区切り。
 export type ToolbarItem = CommandId | "divider";
+
+// 三点リーダーメニュー(全 OS 共通)のグループ定義。
+// ツールバー左端に常駐する `[≡]` ボタンを開いた時に表示するカテゴリ別メニュー。
+// コマンドカタログを流用するので、ID をそのまま並べるだけ。
+// labelKey は `menu.<group>` を i18n に追加する。
+export interface MenuGroup {
+  id: string;
+  labelKey: string;
+  items: CommandId[];
+}
+
+export const MAIN_MENU_GROUPS: readonly MenuGroup[] = [
+  {
+    id: "file",
+    labelKey: "menu.file",
+    items: [
+      "new-tab",
+      "new-from-template",
+      "open-file",
+      "open-folder",
+      "save",
+      "save-as",
+      "export-pdf",
+      "close-tab",
+    ],
+  },
+  {
+    id: "edit",
+    labelKey: "menu.edit",
+    items: [
+      "bold",
+      "italic",
+      "heading-1",
+      "heading-2",
+      "heading-3",
+      "bullet-list",
+      "numbered-list",
+      "math",
+      "code-inline",
+      "code-block",
+      "link",
+      "footnote",
+      "quote",
+      "image",
+      "table",
+      "bibliography",
+    ],
+  },
+  {
+    id: "view",
+    labelKey: "menu.view",
+    items: [
+      "toggle-project-view",
+      "toggle-preview",
+      "toggle-sidebar-mode",
+      "next-tab",
+      "prev-tab",
+    ],
+  },
+  {
+    id: "tools",
+    labelKey: "menu.tools",
+    items: [
+      "open-command-palette",
+      "open-keybindings",
+      "open-toolbar-edit",
+      "open-settings",
+    ],
+  },
+  {
+    id: "help",
+    labelKey: "menu.help",
+    items: ["open-about"],
+  },
+];
 
 // プリセット定義。設定 UI ができるまでは loadSettings 時のフォールバックや
 // 「リセット」操作の参照値として使う。

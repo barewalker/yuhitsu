@@ -35,7 +35,8 @@
     "openSettings": "Open settings file",
     "openKeybindings": "Keybindings",
     "openToolbarEdit": "Edit toolbar",
-    "openCommandPalette": "Command palette"
+    "openCommandPalette": "Command palette",
+    "openAbout": "About Yuhitsu"
   },
   "tab": {
     "untitled": "(Untitled)"
@@ -146,6 +147,35 @@
     "ariaLabel": "Command palette",
     "placeholder": "Search commands…",
     "empty": "No matching commands"
+  },
+  "menu": {
+    "ariaLabel": "Main menu",
+    "open": "Open menu",
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "tools": "Tools",
+    "help": "Help"
+  },
+  "about": {
+    "ariaLabel": "About Yuhitsu",
+    "title": "Yuhitsu",
+    "tagline": "A GUI-friendly local desktop editor built on Typst.",
+    "version": "Version {version}",
+    "license": "Released under Apache-2.0",
+    "authorHeading": "Author",
+    "authorText": "barewalker",
+    "fontsHeading": "Bundled fonts",
+    "fontsText": "Harano Aji Mincho / Gothic (SIL OFL 1.1, by trueroad)",
+    "engineHeading": "Typst engine",
+    "engineText": "Spawns tinymist (Apache-2.0) as LSP / preview / compile subprocess",
+    "linksHeading": "Links",
+    "linkRepo": "GitHub repository",
+    "linkAuthor": "Author on GitHub",
+    "linkTypstDocs": "Typst documentation",
+    "linkHaranoAji": "Harano Aji Fonts",
+    "linkTinymist": "Tinymist",
+    "close": "Close"
   },
   "form": {
     "title": "Form",

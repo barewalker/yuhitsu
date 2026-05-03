@@ -35,7 +35,8 @@
     "openSettings": "設定ファイルを開く",
     "openKeybindings": "キーバインド設定",
     "openToolbarEdit": "ツールバー編集",
-    "openCommandPalette": "コマンドパレット"
+    "openCommandPalette": "コマンドパレット",
+    "openAbout": "Yuhitsu について"
   },
   "tab": {
     "untitled": "(無題)"
@@ -146,6 +147,35 @@
     "ariaLabel": "コマンドパレット",
     "placeholder": "コマンドを検索…",
     "empty": "該当するコマンドがありません"
+  },
+  "menu": {
+    "ariaLabel": "メインメニュー",
+    "open": "メニューを開く",
+    "file": "ファイル",
+    "edit": "編集",
+    "view": "表示",
+    "tools": "ツール",
+    "help": "ヘルプ"
+  },
+  "about": {
+    "ariaLabel": "Yuhitsu について",
+    "title": "右筆 (Yuhitsu)",
+    "tagline": "Typst をベースにした、GUI 親和的なローカルデスクトップエディタ。",
+    "version": "バージョン {version}",
+    "license": "Apache-2.0 で公開",
+    "authorHeading": "作者",
+    "authorText": "barewalker",
+    "fontsHeading": "同梱フォント",
+    "fontsText": "Harano Aji Mincho / Gothic(SIL OFL 1.1、trueroad 氏)",
+    "engineHeading": "Typst エンジン",
+    "engineText": "tinymist(Apache-2.0)を LSP / preview / compile として subprocess 起動",
+    "linksHeading": "リンク",
+    "linkRepo": "GitHub リポジトリ",
+    "linkAuthor": "作者の GitHub",
+    "linkTypstDocs": "Typst 公式ドキュメント",
+    "linkHaranoAji": "Harano Aji Fonts",
+    "linkTinymist": "Tinymist",
+    "close": "閉じる"
   },
   "commandAlias": {
     "newTab": "あたらしいたぶ atarashii shintab しんきたぶ",

@@ -41,6 +41,8 @@
   import KeybindingsDialog from "$lib/KeybindingsDialog.svelte";
   import ToolbarEditDialog from "$lib/ToolbarEditDialog.svelte";
   import CommandPalette from "$lib/CommandPalette.svelte";
+  import MainMenu from "$lib/MainMenu.svelte";
+  import AboutDialog from "$lib/AboutDialog.svelte";
   import FormPanel from "$lib/FormPanel.svelte";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
@@ -100,6 +102,7 @@
   let keybindingsDialogOpen = $state(false);
   let toolbarEditDialogOpen = $state(false);
   let commandPaletteOpen = $state(false);
+  let aboutDialogOpen = $state(false);
   // settings.json の絶対パス。起動時に Rust から取得して保持し、
   // save() でこのパスに書いたら自動で reloadSettings を呼ぶための比較用。
   let settingsPath = $state<string | null>(null);
@@ -1065,6 +1068,7 @@
       openKeybindings,
       openToolbarEdit,
       openCommandPalette,
+      openAbout,
     };
   }
 
@@ -1714,6 +1718,10 @@
     commandPaletteOpen = false;
     runCommand(id);
   }
+
+  function openAbout() {
+    aboutDialogOpen = true;
+  }
   async function applyToolbarUpdate(next: ToolbarItem[]) {
     toolbarItems = next;
     try {
@@ -1951,6 +1959,14 @@
 
 <div class="app">
   <header class="toolbar">
+    <!-- 三点リーダー(メインメニュー)。常駐・先頭固定で、ツールバー編集
+         からは除外する。発見性の最後の砦として全機能アクセスを保証する。 -->
+    <MainMenu
+      {keybindings}
+      editorAvailable={editorView !== null}
+      onSelect={(id) => runCommand(id)}
+    />
+    <span class="toolbar-divider" aria-hidden="true"></span>
     {#each toolbarItems as item, i (i)}
       {#if item === "divider"}
         <span class="toolbar-divider" aria-hidden="true"></span>
@@ -2286,6 +2302,10 @@
       onSelect={onCommandPaletteSelect}
       onClose={() => (commandPaletteOpen = false)}
     />
+  {/if}
+
+  {#if aboutDialogOpen}
+    <AboutDialog onClose={() => (aboutDialogOpen = false)} />
   {/if}
 
   {#if treeMenu}
