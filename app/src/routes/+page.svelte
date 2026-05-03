@@ -76,7 +76,7 @@
     value: string;
     externalState?: EditorState | null;
     mode?: EditorMode;
-    languageMode?: "typst" | "plain";
+    languageMode?: "typst" | "json" | "plain";
     lspClient?: LSPClient | null;
     filePath?: string | null;
     onChange?: (next: string) => void;
@@ -84,6 +84,7 @@
     onReady?: (view: EditorView) => void;
     onTeardown?: () => void;
     onValueApplied?: (view: EditorView) => void;
+    onCommand?: (id: CommandId) => void;
   }> | null>(null);
 
   // Editor.svelte が onReady で渡してくる EditorView。GUI 挿入ボタンや
@@ -405,6 +406,18 @@
     if (!tab) return false;
     if (tab.path === null) return true;
     return isTypstPath(tab.path);
+  }
+
+  // Editor に渡す言語モードを拡張子から決定。.typ / 無題タブは "typst"、
+  // .json は "json"、それ以外は "plain"。
+  function resolveLanguageMode(
+    tab: Tab | null | undefined,
+  ): "typst" | "json" | "plain" {
+    if (!tab) return "plain";
+    if (tab.path === null) return "typst"; // 無題タブは Typst 扱い
+    if (isTypstPath(tab.path)) return "typst";
+    if (tab.path.toLowerCase().endsWith(".json")) return "json";
+    return "plain";
   }
 
   // ファイル選択ダイアログのフィルタ。locale 変更後にも追従させたいので、
@@ -2181,7 +2194,7 @@
             value={content}
             externalState={activeEditorState}
             mode={editorMode}
-            languageMode={isTypstTab(getActiveTab()) ? "typst" : "plain"}
+            languageMode={resolveLanguageMode(getActiveTab())}
             {lspClient}
             filePath={editorFilePath}
             onChange={onEditorChange}
@@ -2189,6 +2202,7 @@
             onReady={onEditorReady}
             onTeardown={onEditorTeardown}
             onValueApplied={onEditorValueApplied}
+            onCommand={runCommand}
           />
         {:else}
           <div class="placeholder">{t("placeholder.editorLoading")}</div>

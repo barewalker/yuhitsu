@@ -14,6 +14,7 @@ import LayoutGrid from "@lucide/svelte/icons/layout-grid";
 import LayoutPanelLeft from "@lucide/svelte/icons/layout-panel-left";
 import Command from "@lucide/svelte/icons/command";
 import Info from "@lucide/svelte/icons/info";
+import Search from "@lucide/svelte/icons/search";
 import Code from "@lucide/svelte/icons/code";
 import CodeXml from "@lucide/svelte/icons/code-xml";
 import FileDown from "@lucide/svelte/icons/file-down";
@@ -52,6 +53,7 @@ import {
   toggleMath,
   toggleNumberedList,
 } from "$lib/editor-commands";
+import { openSearchPanel } from "@codemirror/search";
 
 export const COMMAND_IDS = [
   "new-tab",
@@ -88,6 +90,7 @@ export const COMMAND_IDS = [
   "open-toolbar-edit",
   "open-command-palette",
   "open-about",
+  "find",
 ] as const;
 
 export type CommandId = (typeof COMMAND_IDS)[number];
@@ -430,6 +433,19 @@ export const COMMANDS: Record<CommandId, CommandDef> = {
     needsEditor: false,
     run: (ctx) => ctx.openAbout(),
   },
+  find: {
+    id: "find",
+    labelKey: "command.find",
+    icon: Search,
+    // CodeMirror 標準 search パネルを開く。同じパネル内で検索 / 置換が
+    // 切り替えられる(置換は Ctrl+H、F3 で次、Shift+F3 で前 — これらは
+    // searchKeymap が直接提供する。コマンドカタログには find だけ載せる)。
+    defaultKey: "Mod-f",
+    needsEditor: true,
+    run: editorRun((v) => {
+      openSearchPanel(v);
+    }),
+  },
 };
 
 // ツールバー上の項目。コマンド ID か区切り。
@@ -464,6 +480,7 @@ export const MAIN_MENU_GROUPS: readonly MenuGroup[] = [
     id: "edit",
     labelKey: "menu.edit",
     items: [
+      "find",
       "bold",
       "italic",
       "heading-1",

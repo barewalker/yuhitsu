@@ -589,6 +589,20 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - 残:無題タブ(path 無し)はまだ対象外。仮想パス(例 `__yuhitsu_unsaved_<tabId>__.typ`)を割り当てて memory file 化すれば対応可だが、preview の subprocess 起動引数に実在ファイルが要る制約があり別タスク
 - 動作確認:**氏に GUI で確認してもらう必要あり**。型チェック(`pnpm check`)・Rust ビルド(`cargo check`)は通過
 
+### 2026-05-03: vim mode は experimental 扱い(WebKitGTK 環境で挙動不審)
+- **発覚した問題**(氏報告):
+  - **(A) IME ON で vim が反応しない**:`:` を押しても ex モードに入らない、`i` などのモード切替も効かない。IME OFF で復帰
+  - **(B) インサートモードで 1 文字打つと勝手にノーマルモードへ**:連打すると数文字入る。どの ASCII 文字でも、IME OFF でも発生
+  - **(C) Space リーダー(コマンドパレット起動)が動かない**:`Vim.map(" ", ":Cmd<CR>", "normal")` でも `Prec.highest` の自前 keymap でも、ノーマルモード Space で発火しないケース
+- **切り分け**:`editor.mode = "default"` に切替 → 全部消える。**`@replit/codemirror-vim` 起因確定**(Yuhitsu 側の今回の変更とは独立)
+- **判断**(氏合意):**vim mode は experimental ラベル付きで提供**。深追いはコスト過大、当面は default / emacs を推奨
+- **残した実装**:
+  - `Vim.defineEx` での `:w` `:q` `:wq` `:tabnew` `:tabclose` `:bnext` `:bprev` `:edit` `:Cmd` 紐付けはそのまま残す(他モードに副作用なし、vim mode で IME OFF なら一応動く)
+  - `:Cmd` で コマンドパレットを開く ex コマンドは動作確認できるユーザもいるので残置
+  - Space リーダー keymap も残置(動く環境なら効く)
+- **将来の選択肢**:`@replit/codemirror-vim` の上流に issue 報告 / fix 待ち、別の vim emulation を検討、もしくは Yuhitsu 専用の最小 vim 互換実装(別途設計)
+- **(4) `:s/aaa/bbb/` の `No matches for /aaa/im` メッセージ**:これは vim 標準の情報メッセージ(エラーではない)、置換は実行されている。気にしなくてよい
+
 ### 2026-05-02: 無題タブで LSP 機能(hover / 補完 / 診断)が無効になる bug 修正
 - **症状**(氏報告):業務報告書テンプレを当てた無題タブで、`#text` 等の組み込み関数にマウスを乗せても hover が出ない、補完(`#l` でポップアップ)も出ない、診断(赤波線)も出ない。一方 syntax highlight は動作している
 - **真因**:Editor.svelte の `filePath` prop に渡していた値が `path = $derived(getActiveTab()?.path ?? null)` で、**無題タブでは null**。`lspExtension(client, null)` は `if (!client || !file) return [];` のガードで **空 extension** を返し、`languageServerSupport` 自体が組み込まれない → hover / 補完 / 診断が一切動かない

@@ -19,9 +19,15 @@
     history,
     historyKeymap,
   } from "@codemirror/commands";
+  import { search, searchKeymap } from "@codemirror/search";
+  import { phrasesFor } from "$lib/codemirror-phrases";
+  import { i18nState } from "$lib/i18n/index.svelte";
   import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
   import { tags as t } from "@lezer/highlight";
   import { typstStreamLanguage } from "$lib/typst-stream-mode";
+  import { json } from "@codemirror/lang-json";
+  import { Vim, getCM } from "@replit/codemirror-vim";
+  import type { CommandId } from "$lib/commands";
   import { vim } from "@replit/codemirror-vim";
   import { emacs } from "@replit/codemirror-emacs";
   import {
@@ -75,7 +81,7 @@
     { tag: [t.moduleKeyword, t.operatorKeyword], color: "var(--syntax-operator)" },
   ]);
 
-  export type LanguageMode = "typst" | "plain";
+  export type LanguageMode = "typst" | "json" | "plain";
 
   // ステータスバー用のカーソル情報。line / col は 1-origin、
   //   selected      = 選択範囲の長さ(全 code unit、選択なしなら 0)
@@ -126,6 +132,9 @@
     /** 外部由来 value 変更が doc に適用された直後に呼ぶ。親が
         カーソル / スクロール位置を復元するためのフック(タブ切替で使う) */
     onValueApplied?: (view: EditorView) => void;
+    /** vim ex コマンド(`:w` 等)や Space リーダーから Yuhitsu のコマンドを
+        呼び出すための入口。親側 +page.svelte の runCommand を渡す */
+    onCommand?: (id: CommandId) => void;
   };
 
   let {
@@ -140,6 +149,7 @@
     onReady,
     onTeardown,
     onValueApplied,
+    onCommand,
   }: Props = $props();
 
   let host: HTMLDivElement;
@@ -189,13 +199,27 @@
   // 1 個の view を共有しているため A の状態にまで遡及してしまう。
   const historyCompartment = new Compartment();
 
+  // CodeMirror 組み込み UI(検索パネル等)の phrase 翻訳。locale 変更で
+  // 動的に差し替えるための Compartment。
+  const phrasesCompartment = new Compartment();
+  function phrasesExtension(): Extension {
+    return EditorState.phrases.of(phrasesFor(i18nState.locale));
+  }
+
   function langExtension(target: LanguageMode): Extension {
     if (target === "plain") return [];
-    // StreamLanguage ベースの簡易ハイライタ($lib/typst-stream-mode.ts)。
-    // codemirror-lang-typst の WASM panic を避けつつ、表面的な色付け
-    // (コメント / 文字列 / 数値 / キーワード / 関数呼び出し / 見出し /
-    //  リスト / 強調 / 数式 / インラインコード)を行ベースで提供する。
-    // 完全な構文認識は LSP(tinymist)が担うので二重持ちは不要
+    if (target === "json") {
+      // settings.json などの JSON ファイル向け。@codemirror/lang-json は
+      // Lezer parser ベースで括弧マッチング・自動インデントも入る。
+      return [
+        json(),
+        Prec.highest(syntaxHighlighting(highlightStyle)),
+      ];
+    }
+    // typst:StreamLanguage ベースの簡易ハイライタ。codemirror-lang-typst の
+    // WASM panic を避けつつ、表面的な色付け(コメント / 文字列 / 数値 /
+    // キーワード / 関数呼び出し / 見出し / リスト / 強調 / 数式 / インライン
+    // コード)を行ベースで提供する。完全な構文認識は LSP(tinymist)が担う
     return [
       typstStreamLanguage,
       Prec.highest(syntaxHighlighting(highlightStyle)),
@@ -241,7 +265,63 @@
     { dark: true },
   );
 
+  // vim ex コマンドと Space リーダー登録(Vim API はグローバル singleton)。
+  // singleton 故に複数 Editor が立ってもどれか 1 つの onMount で登録すれば
+  // 全インスタンスに効く(Yuhitsu は単一 view 前提)。callback は最新の
+  // onCommand prop を closure 経由で参照する($props は reactive なので
+  // 関数 identity が変わっても次回呼び出しで最新が取れる)。
+  // [experimental 2026-05-03] vim mode は @replit/codemirror-vim 起因と
+  // 思われる挙動不審あり(IME ON で `:` が届かない、インサートモードで
+  // 1 文字打つと勝手にノーマルモードに戻る)。default / emacs では発生
+  // しない。defineEx の登録は副作用なく安全(他モードに影響しない)ので
+  // 残し、:w / :q / :tabnew 等が必要なユーザは vim mode を有効化して使う。
+  // Space リーダー(コマンドパレット)も同根の挙動不審で動作不確実、
+  // ペンディング。詳細は PROGRESS.md 参照。
+  function registerVimBindings() {
+    const dispatch = (id: CommandId) => onCommand?.(id);
+    Vim.defineEx("write", "w", () => dispatch("save"));
+    Vim.defineEx("quit", "q", () => dispatch("close-tab"));
+    Vim.defineEx("wq", undefined, () => {
+      dispatch("save");
+      dispatch("close-tab");
+    });
+    Vim.defineEx("edit", "e", () => dispatch("open-file"));
+    Vim.defineEx("tabnew", "tabnew", () => dispatch("new-tab"));
+    Vim.defineEx("tabclose", "tabc", () => dispatch("close-tab"));
+    Vim.defineEx("bnext", "bn", () => dispatch("next-tab"));
+    Vim.defineEx("bprev", "bp", () => dispatch("prev-tab"));
+    Vim.defineEx("Cmd", "cmd", () => dispatch("open-command-palette"));
+  }
+
+  // Neovim 流儀:vim ノーマルモードで Space → コマンドパレット。
+  // Vim.map(" ", ":Cmd<CR>", "normal") は環境(IME / WebKitGTK)依存で
+  // 効きにくいため、CodeMirror の keymap で vim state を直接見て判定する。
+  // インサート / ビジュアルモード では false を返してパススルー(普通の
+  // 空白入力やテキストオブジェクト操作を壊さない)。
+  const vimSpaceLeaderKeymap = keymap.of([
+    {
+      key: " ",
+      run: (v) => {
+        const cm = getCM(v);
+        // vim 拡張が刺さっていなければ拒否(default モードでは何もしない)
+        const vs = cm?.state?.vim;
+        if (!vs) return false;
+        if (vs.insertMode || vs.visualMode) return false;
+        onCommand?.("open-command-palette");
+        return true;
+      },
+    },
+  ]);
+
   onMount(() => {
+    // vim API はモジュール top-level で触ると初期化前に当たる経路がある
+    // ようなので、view 初期化と同じタイミングで呼ぶ。失敗しても other モード
+    // (default / emacs)には影響ないので呑み込んで続行。
+    try {
+      registerVimBindings();
+    } catch (e) {
+      console.warn("[editor] vim binding setup failed:", e);
+    }
     const updateListener = EditorView.updateListener.of((update) => {
       if (applyingExternal) return;
       // doc 変化はテキスト永続化 + preview memory file 注入につなぐ。
@@ -282,7 +362,18 @@
         highlightActiveLine(),
         highlightActiveLineGutter(),
         historyCompartment.of(history()),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // 検索 / 置換のパネルとキーマップ。Ctrl+F = 検索、Ctrl+H = 置換、
+        // F3 / Shift+F3 = 次/前、Ctrl+G / Ctrl+Shift+G も標準で割当て済み。
+        // パネルは search() extension がエディタ下部に開閉する。
+        search({ top: false }),
+        // 検索パネル等の組み込み UI を locale に合わせて翻訳
+        phrasesCompartment.of(phrasesExtension()),
+        // vim Space リーダーは vim プラグインのキーマップより上の優先度で
+        // 当てる必要がある(vim ノーマルモードの Space は通常 forward-char に
+        // 既定マッピングされていて、それが先勝ちすると Space が消費される)。
+        // Prec.highest で先勝ちを保証する。
+        Prec.highest(vimSpaceLeaderKeymap),
+        keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap]),
         theme,
         EditorView.lineWrapping,
         updateListener,
@@ -387,6 +478,17 @@
     if (!view) return;
     view.dispatch({
       effects: langCompartment.reconfigure(langExtension(languageMode)),
+    });
+  });
+
+  // i18n locale 変更で CodeMirror 組み込み UI の phrase を切り替える。
+  // i18nState は $state なので依存追跡は phrasesFor 内の locale 参照で動く。
+  $effect(() => {
+    if (!view) return;
+    // locale を依存として登録(関数呼び出しの中で参照される)
+    void i18nState.locale;
+    view.dispatch({
+      effects: phrasesCompartment.reconfigure(phrasesExtension()),
     });
   });
 </script>

@@ -36,7 +36,8 @@
     "openKeybindings": "Keybindings",
     "openToolbarEdit": "Edit toolbar",
     "openCommandPalette": "Command palette",
-    "openAbout": "About Yuhitsu"
+    "openAbout": "About Yuhitsu",
+    "find": "Find / Replace"
   },
   "tab": {
     "untitled": "(Untitled)"

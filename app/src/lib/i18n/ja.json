@@ -36,7 +36,8 @@
     "openKeybindings": "キーバインド設定",
     "openToolbarEdit": "ツールバー編集",
     "openCommandPalette": "コマンドパレット",
-    "openAbout": "Yuhitsu について"
+    "openAbout": "Yuhitsu について",
+    "find": "検索 / 置換"
   },
   "tab": {
     "untitled": "(無題)"
@@ -204,6 +205,7 @@
     "image": "がぞう gazou image",
     "table": "ひょう hyou table",
     "bibliography": "さんこうぶんけん sankoubunken bibliography reference",
+    "find": "けんさく ちかん kensaku chikan find replace search",
     "toggleProjectView": "ぷろじぇくとびゅー projectview sidebar",
     "togglePreview": "ぷれびゅー preview",
     "toggleSidebarMode": "さいどばーきりかえ sidebar mode",
