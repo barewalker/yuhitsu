@@ -13,12 +13,18 @@
     "windows": [
       {
         "title": "yuhitsu",
-        "width": 800,
-        "height": 600
+        "width": 1100,
+        "height": 720,
+        "decorations": false,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     }
   },
   "bundle": {

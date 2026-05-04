@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { platform } from "@tauri-apps/plugin-os";
   import {
     ask,
     open as openDialog,
@@ -44,6 +45,10 @@
   import MainMenu from "$lib/MainMenu.svelte";
   import AboutDialog from "$lib/AboutDialog.svelte";
   import FormPanel from "$lib/FormPanel.svelte";
+  import Minus from "@lucide/svelte/icons/minus";
+  import Square from "@lucide/svelte/icons/square";
+  import Copy from "@lucide/svelte/icons/copy";
+  import X from "@lucide/svelte/icons/x";
   import { resolveLocale, type Locale } from "$lib/i18n/locale";
   import { setLocale, t } from "$lib/i18n/index.svelte";
   import { listTemplates, resolveTemplate } from "$lib/templates";
@@ -99,6 +104,16 @@
   let localeMode = $state<LocaleMode>("auto");
   let paperSize = $state<PaperSize>("auto");
   let firstRunDone = $state(true); // 起動時に loadSettings で本物の値に上書き
+  // 自前タイトルバー(CSD = Client Side Decoration)用の OS 情報。
+  // macOS は OS 描画の traffic light(window controls)が左上に出るので、
+  // 自前ボタンは出さない代わりに左を空けてスペーサで詰める。
+  // Win/Linux は自前ボタン(min / max / close)を右に並べる。
+  let osPlatform = $state<string>("");
+  let isMacOS = $derived(osPlatform === "macos");
+  let isMaximized = $state(false);
+  // タイトルバー / フォーム / その他で何度も呼ぶので derived 化
+  let titlebarActiveTab = $derived(getActiveTab());
+
   let templateDialogOpen = $state(false);
   let keybindingsDialogOpen = $state(false);
   let toolbarEditDialogOpen = $state(false);
@@ -217,11 +232,23 @@
     for (const persisted of state.tabs) {
       try {
         if (persisted.kind === "file") {
-          const doc = await invoke<FileDoc>("open_file", { path: persisted.path });
+          const tabKind = tabKindFromPath(persisted.path);
+          // 画像 / PDF はテキストとして読まず、表示用タブとして復元する。
+          // 内容は <img> / <iframe> が直接 path から取得する(content は空)
+          let content = "";
+          let resolvedPath = persisted.path;
+          if (tabKind === "text") {
+            const doc = await invoke<FileDoc>("open_file", {
+              path: persisted.path,
+            });
+            content = doc.content;
+            resolvedPath = doc.path;
+          }
           restored.push({
             id: newTabId(),
-            path: doc.path,
-            content: doc.content,
+            path: resolvedPath,
+            kind: tabKind,
+            content,
             dirty: false,
             cursorAnchor: persisted.cursorAnchor,
             cursorHead: persisted.cursorHead,
@@ -249,6 +276,7 @@
           restored.push({
             id,
             path: null,
+            kind: "text",
             content: persisted.content,
             // 復元時は「未保存の編集が残っていた」状態なので dirty=true
             dirty: true,
@@ -327,9 +355,17 @@
   // 1 タブ = 1 ファイルの編集セッション。path=null は未保存の新規タブ。
   // カーソル/スクロール位置はタブ切替で復元するため per-tab に保持する。
   type TabId = string;
+  // タブの種類。
+  //   "text"  : テキスト編集(.typ / .md / .json / 等)
+  //   "image" : 画像表示(.png / .jpg / .gif / .webp / .svg / .avif)
+  //   "pdf"   : PDF プレビュー(<iframe> 経由)
+  // image / pdf は表示専用で編集不可、preview / LSP / 検索は無効。
+  type TabKind = "text" | "image" | "pdf";
+
   type Tab = {
     id: TabId;
     path: string | null;
+    kind: TabKind;
     content: string;
     dirty: boolean;
     cursorAnchor: number;
@@ -356,6 +392,7 @@
     return {
       id: newTabId(),
       path: null,
+      kind: "text",
       content: "",
       dirty: false,
       cursorAnchor: 0,
@@ -364,6 +401,20 @@
       editorState: null,
       virtualPath: null,
     };
+  }
+
+  // 画像系拡張子(<img> でタブ表示できるもの)。
+  // PDF は別扱い(iframe で表示)、Typst の image() でも取り込める。
+  const IMAGE_TAB_EXTS = ["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"];
+  function tabKindFromPath(p: string | null): TabKind {
+    if (!p) return "text";
+    const ext = p.toLowerCase().split(".").pop() ?? "";
+    if (ext === "pdf") return "pdf";
+    if (IMAGE_TAB_EXTS.includes(ext)) return "image";
+    return "text";
+  }
+  function isViewerKind(k: TabKind): boolean {
+    return k === "image" || k === "pdf";
   }
 
   // 無題タブで preview / LSP を起動する直前に呼び、必要なら仮想ファイルを
@@ -402,8 +453,10 @@
   // タブが Typst 機能(preview / LSP / PDF / 構文ハイライト)の対象か判定。
   // 無題タブ(path=null)は新規 Typst ドキュメント前提で常に対象。
   // 既存ファイルを開いたタブは拡張子 .typ のみ対象、それ以外(.md / .csv 等)は対象外。
+  // image / pdf タブは表示専用なので絶対に対象外。
   function isTypstTab(tab: Tab | null | undefined): boolean {
     if (!tab) return false;
+    if (tab.kind !== "text") return false;
     if (tab.path === null) return true;
     return isTypstPath(tab.path);
   }
@@ -678,10 +731,22 @@
 
   async function openFile() {
     try {
-      // .typ に限らずテキスト全般を許容(タブで参照しながら編集する用途)
+      // テキスト系全般 + 画像 / PDF も許容。バイナリ(動画・実行ファイル等)
+      // が選ばれた場合は openFileAtPath 内でフォールバック判定し、対応外なら
+      // OS デフォルトに流す。
       const selected = await openDialog({ multiple: false });
       if (typeof selected !== "string") return;
-      await openFileAtPath(selected);
+      const kind = tabKindFromPath(selected);
+      if (isTextLikePath(selected) || kind !== "text") {
+        await openFileAtPath(selected);
+        return;
+      }
+      // 想定外(.zip 等)は OS デフォルトに流す
+      try {
+        await openUrl(pathToFileUri(selected));
+      } catch (e) {
+        setStatus(t("status.openExternalFailed", { error: String(e) }));
+      }
     } catch (e) {
       setStatus(String(e));
     }
@@ -911,20 +976,30 @@
       return;
     }
     try {
-      const doc = await invoke<FileDoc>("open_file", { path: filePath });
+      const tabKind = tabKindFromPath(filePath);
+      // 画像 / PDF はテキストとして読まず、表示用タブにする。
+      // 内容は <img> / <iframe> が直接 path から取得する(content は空)
+      let resolvedPath = filePath;
+      let content = "";
+      if (tabKind === "text") {
+        const doc = await invoke<FileDoc>("open_file", { path: filePath });
+        resolvedPath = doc.path;
+        content = doc.content;
+      }
       // 現在の active が空タブ(無題かつ未編集)ならそれを使い回す、
       // そうでなければ新規タブを足す。
       captureActiveTabState();
       const current = getActiveTab();
       const reuseEmpty =
         current && current.path === null && !current.dirty &&
-        current.content === "";
+        current.content === "" && current.kind === "text";
       if (reuseEmpty && current) {
         // ファイル open で実 path に切替。無題タブだった時の仮想ファイルが
         // あれば破棄して preview を新 path に乗せ替える前準備。
         await disposeVirtualPathFor(current);
-        current.path = doc.path;
-        current.content = doc.content;
+        current.path = resolvedPath;
+        current.kind = tabKind;
+        current.content = content;
         current.dirty = false;
         current.cursorAnchor = 0;
         current.cursorHead = 0;
@@ -934,8 +1009,9 @@
       } else {
         const tab: Tab = {
           id: newTabId(),
-          path: doc.path,
-          content: doc.content,
+          path: resolvedPath,
+          kind: tabKind,
+          content,
           dirty: false,
           cursorAnchor: 0,
           cursorHead: 0,
@@ -1141,6 +1217,7 @@
       const tab: Tab = {
         id: newTabId(),
         path: null,
+        kind: "text",
         content: tpl.body,
         dirty: true,
         cursorAnchor: 0,
@@ -1554,11 +1631,12 @@
   }
 
   async function selectFromTree(target: string) {
-    if (isTextLikePath(target)) {
+    const kind = tabKindFromPath(target);
+    // テキスト系 / 画像 / PDF は Yuhitsu のタブで開く。それ以外は OS デフォルト
+    if (isTextLikePath(target) || kind !== "text") {
       await openFileAtPath(target);
       return;
     }
-    // バイナリは OS デフォルトに流す
     try {
       await openUrl(pathToFileUri(target));
     } catch (e) {
@@ -1819,13 +1897,58 @@
     }
   }
 
+  // タイトルバーボタンのアクション。失敗は黙殺(window 操作はベストエフォート)
+  async function titlebarMinimize() {
+    try {
+      await getCurrentWindow().minimize();
+    } catch (e) {
+      console.warn("[titlebar] minimize failed:", e);
+    }
+  }
+  async function titlebarToggleMaximize() {
+    try {
+      const win = getCurrentWindow();
+      await win.toggleMaximize();
+      isMaximized = await win.isMaximized();
+    } catch (e) {
+      console.warn("[titlebar] toggleMaximize failed:", e);
+    }
+  }
+  async function titlebarClose() {
+    try {
+      await getCurrentWindow().close();
+    } catch (e) {
+      console.warn("[titlebar] close failed:", e);
+    }
+  }
+
   onMount(() => {
     let unlisten: (() => void) | undefined;
     let unlistenDrop: (() => void) | undefined;
     let unlistenSystemTheme: (() => void) | undefined;
     let unlistenFocus: (() => void) | undefined;
+    let unlistenResize: (() => void) | undefined;
     (async () => {
       const win = getCurrentWindow();
+      // OS 判定。タイトルバー右側のウィンドウ操作ボタンを macOS では出さない
+      // (OS の traffic light が左上に出る)
+      try {
+        osPlatform = platform();
+      } catch (e) {
+        console.warn("[titlebar] platform query failed:", e);
+      }
+      // 最大化状態の追従:resize 経由で取得し、ボタン表示(□ ↔ ❐)を切替
+      try {
+        isMaximized = await win.isMaximized();
+        const off = await win.onResized(async () => {
+          try {
+            isMaximized = await win.isMaximized();
+          } catch {}
+        });
+        unlistenResize = off;
+      } catch (e) {
+        console.warn("[titlebar] resize listen failed:", e);
+      }
       unlisten = await win.onCloseRequested(async (event) => {
         if (!dirty) {
           // dirty でなくても preview / LSP の subprocess は止めたい
@@ -1964,6 +2087,7 @@
       unlistenDrop?.();
       unlistenSystemTheme?.();
       unlistenFocus?.();
+      unlistenResize?.();
     };
   });
 </script>
@@ -1971,6 +2095,104 @@
 <svelte:window onkeydown={onKeydown} onclickcapture={onAnchorClickCapture} />
 
 <div class="app">
+  <!--
+    自前タイトルバー(CSD)。OS のタイトルバーは tauri.conf.json で
+    decorations: false にして消してある。
+    左側:macOS は OS の traffic light が左上に出るのでスペーサで詰める。
+    中央:active タブのファイル名 + dirty マーカ + status メッセージ。
+    右側:行・列 / 文字数 / window controls(macOS では非表示)。
+    `data-tauri-drag-region` の付いた要素を掴むとウィンドウドラッグ移動。
+  -->
+  <header class="titlebar" data-tauri-drag-region>
+    {#if isMacOS}
+      <!-- macOS の traffic light(閉じる/最小化/最大化)が左に出るので空ける -->
+      <div class="titlebar-spacer-mac" data-tauri-drag-region></div>
+    {/if}
+    <div class="titlebar-center" data-tauri-drag-region>
+      {#if titlebarActiveTab}
+        <span class="titlebar-filename" data-tauri-drag-region>
+          {titlebarActiveTab.path
+            ? basename(titlebarActiveTab.path)
+            : t("tab.untitled")}
+        </span>
+        {#if titlebarActiveTab.dirty}
+          <span class="titlebar-dirty" aria-hidden="true" data-tauri-drag-region
+            >●</span
+          >
+        {/if}
+      {/if}
+      {#if status}
+        <span
+          class="titlebar-status status-{statusKind}"
+          data-tauri-drag-region>{status}</span
+        >
+      {/if}
+    </div>
+    <div class="titlebar-right">
+      {#if cursor}
+        {@const totalShown =
+          charCountMode === "all" ? cursor.total : cursor.totalNoWs}
+        {@const selectedShown =
+          charCountMode === "all" ? cursor.selected : cursor.selectedNoWs}
+        <span class="titlebar-counter" data-tauri-drag-region>
+          {t("statusbar.lineCol", {
+            line: String(cursor.line),
+            col: String(cursor.col),
+          })}
+        </span>
+        <span class="titlebar-counter" data-tauri-drag-region>
+          {selectedShown > 0
+            ? t("statusbar.charsSelected", {
+                selected: String(selectedShown),
+                total: String(totalShown),
+              })
+            : t("statusbar.chars", { total: String(totalShown) })}
+        </span>
+      {/if}
+      {#if !isMacOS}
+        <div class="window-controls">
+          <button
+            type="button"
+            class="window-control"
+            aria-label={t("titlebar.minimize")}
+            title={t("titlebar.minimize")}
+            onclick={titlebarMinimize}
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            type="button"
+            class="window-control"
+            aria-label={isMaximized
+              ? t("titlebar.restore")
+              : t("titlebar.maximize")}
+            title={isMaximized
+              ? t("titlebar.restore")
+              : t("titlebar.maximize")}
+            onclick={titlebarToggleMaximize}
+          >
+            <!-- 最大化中は「重なった枠 = 元のサイズに戻す」アイコン、
+                 非最大化中は「単一の四角 = 最大化」アイコンで状態が一目瞭然 -->
+            {#if isMaximized}
+              <Copy size={12} />
+            {:else}
+              <Square size={12} />
+            {/if}
+          </button>
+          <button
+            type="button"
+            class="window-control window-control-close"
+            aria-label={t("titlebar.close")}
+            title={t("titlebar.close")}
+            onclick={titlebarClose}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      {/if}
+    </div>
+  </header>
+
   <header class="toolbar">
     <!-- 三点リーダー(メインメニュー)。常駐・先頭固定で、ツールバー編集
          からは除外する。発見性の最後の砦として全機能アクセスを保証する。 -->
@@ -2189,7 +2411,28 @@
             ? `0 0 ${editorPaneRatio * 100}%`
             : "1 1 100%"}
         >
-        {#if Editor}
+        {#if titlebarActiveTab && titlebarActiveTab.kind === "image" && titlebarActiveTab.path}
+          <!-- 画像タブ:Tauri assetProtocol 経由で <img> に流す。
+               編集不可、preview / LSP / 検索 すべて無効 -->
+          <div class="viewer-pane">
+            <img
+              class="viewer-image"
+              src={convertFileSrc(titlebarActiveTab.path)}
+              alt={basename(titlebarActiveTab.path)}
+            />
+          </div>
+        {:else if titlebarActiveTab && titlebarActiveTab.kind === "pdf" && titlebarActiveTab.path}
+          <!-- PDF タブ:<iframe> でブラウザの PDF レンダラに任せる。
+               Typst では #image("...pdf") として取り込み可能なので、
+               Yuhitsu でも文書資源の一部として扱える -->
+          <div class="viewer-pane">
+            <iframe
+              class="viewer-pdf"
+              src={convertFileSrc(titlebarActiveTab.path)}
+              title={basename(titlebarActiveTab.path)}
+            ></iframe>
+          </div>
+        {:else if Editor}
           <Editor
             value={content}
             externalState={activeEditorState}
@@ -2245,44 +2488,9 @@
     </div>
   </div>
 
-  {#if statusbarVisible}
-    <!--
-      ステータスバー(画面下部、設定で on/off 切替)。
-      左:status メッセージ / 右:行・列、文字数。
-      ワードカウント(Typst コンパイル後の本文字数)は Phase 2 以降に予定。
-    -->
-    <footer class="statusbar">
-      <span class="statusbar-message">
-        {#if status}
-          <span class="status status-{statusKind}">{status}</span>
-        {/if}
-      </span>
-      <span class="statusbar-counters">
-        {#if cursor}
-          {@const totalShown =
-            charCountMode === "all" ? cursor.total : cursor.totalNoWs}
-          {@const selectedShown =
-            charCountMode === "all" ? cursor.selected : cursor.selectedNoWs}
-          <span class="counter" data-slot="line"
-            >{t("statusbar.lineCol", {
-              line: String(cursor.line),
-              col: String(cursor.col),
-            })}</span
-          >
-          <span class="counter" data-slot="char"
-            >{selectedShown > 0
-              ? t("statusbar.charsSelected", {
-                  selected: String(selectedShown),
-                  total: String(totalShown),
-                })
-              : t("statusbar.chars", { total: String(totalShown) })}</span
-          >
-        {/if}
-        <!-- ワードカウント(Typst コンパイル後)は Phase 2 で実装する空スロット -->
-        <span class="counter" data-slot="word"></span>
-      </span>
-    </footer>
-  {/if}
+  <!-- ステータスバーは廃止。表示内容(行・列 / 文字数 / status メッセージ)
+       は CSD タイトルバーに集約済み。設定の statusbarVisible は当面無視
+       (将来 Phase 2 でワードカウント等の追加表示が必要になれば復活検討) -->
 
   {#if templateDialogOpen}
     <TemplateDialog
@@ -2511,6 +2719,98 @@
     background: var(--accent-bg-subtle);
     border-color: var(--accent-strong);
     color: var(--text-strong);
+  }
+
+  /* 自前タイトルバー(CSD)。OS のタイトルバーは tauri.conf.json で消してある */
+  .titlebar {
+    display: flex;
+    align-items: stretch;
+    height: 30px;
+    flex-shrink: 0;
+    background: var(--bg-elevated-2);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* macOS の traffic light 用スペーサ(72px ≒ 3 ボタン分の左マージン) */
+  .titlebar-spacer-mac {
+    flex: 0 0 72px;
+  }
+  .titlebar-center {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 12px;
+  }
+  .titlebar-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .titlebar-dirty {
+    color: var(--accent);
+    font-size: 8px;
+    line-height: 1;
+  }
+  .titlebar-status {
+    margin-left: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+  .titlebar-status.status-error {
+    color: var(--status-error);
+  }
+  .titlebar-status.status-info {
+    color: var(--text-secondary);
+  }
+  .titlebar-right {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .titlebar-counter {
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .window-controls {
+    display: flex;
+    align-items: stretch;
+  }
+  .window-control {
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    /* タイトルバー全体は drag-region だが、ボタンは個別操作なので除外 */
+    -webkit-app-region: no-drag;
+  }
+  .window-control:hover {
+    background: var(--bg-elevated-1);
+    color: var(--text-primary);
+  }
+  .window-control-close:hover {
+    background: var(--status-error);
+    color: white;
   }
 
   .toolbar {
@@ -2889,6 +3189,42 @@
     flex: 1;
     min-height: 0;
     height: 100%;
+  }
+
+  /* 画像 / PDF タブの表示用ペイン。エディタの代わりにエディタペインを占有する */
+  .viewer-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    background: var(--bg-elevated-2);
+    padding: 12px;
+  }
+  .viewer-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    /* チェッカーボード背景で透過 png の判別を助ける */
+    background-image:
+      linear-gradient(45deg, rgba(127, 127, 127, 0.15) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(127, 127, 127, 0.15) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(127, 127, 127, 0.15) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(127, 127, 127, 0.15) 75%);
+    background-size: 16px 16px;
+    background-position:
+      0 0,
+      0 8px,
+      8px -8px,
+      -8px 0;
+  }
+  .viewer-pdf {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: white;
   }
 
   .placeholder {

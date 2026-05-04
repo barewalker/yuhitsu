@@ -42,6 +42,12 @@
   "tab": {
     "untitled": "(無題)"
   },
+  "titlebar": {
+    "minimize": "最小化",
+    "maximize": "最大化",
+    "restore": "元のサイズに戻す",
+    "close": "閉じる"
+  },
   "dialog": {
     "title": "右筆",
     "discardTabUntitled": "未保存の変更があります。名前をつけて保存しますか?",

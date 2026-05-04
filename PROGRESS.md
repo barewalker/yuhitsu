@@ -315,6 +315,17 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [ ] 見出し・強調・引用の記法非表示化(PoC)
 - [ ] カーソル位置での記法表示切り替え
 - [ ] 表・リスト等の WYSIWYG 化
+- [ ] **`.typz` 単一ファイルバンドル形式**(2026-05-03 氏承認、Word ライク移行体験)
+  - 主拡張子 `.typz`(Typst バンドル)、互換として `.yhz` も読み書き両対応
+  - 中身は zip:`manifest.json` + `main.typ` + `images/` + `fonts/`(opt) + `references.yml`(opt)
+  - 開く:zip → temp dir 展開 → tinymist の `--root` を temp に向ける
+  - 編集中:ユーザはフラット感覚(images 等は `images/<name>` の相対参照)
+  - 保存:temp dir を再 zip → `.typz` に書き戻し
+  - 閉じる:temp dir 削除(クラッシュ復帰のため auto-save 必須)
+  - 画像挿入:選択された画像を temp dir 内に copy → 相対パスで挿入
+  - 既存の素 `.typ` + フォルダワークフローは維持(.typz は追加レイヤ、両対応)
+  - 工数感:1〜2 週間(Rust の `zip` crate、Tauri command 増設、画像挿入の path 解決変更、auto-save / temp 管理)
+  - 拡張子の懸念(リスク 1):公式が将来 `.typz` を別用途で予約する可能性。現状空きで先取り、衝突時は名称変更 migration を 1 回だけ入れる
 - [ ] **Yuhitsu を MCP サーバとして公開**(Claude Cowork 等の外部エージェントから制御可能化)
   - [ ] `@modelcontextprotocol/sdk`(MIT)で Yuhitsu の操作を MCP ツールとして公開
   - [ ] read_document / apply_edit / get_diagnostics / compile などのツール定義

@@ -42,6 +42,12 @@
   "tab": {
     "untitled": "(Untitled)"
   },
+  "titlebar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
   "dialog": {
     "title": "Yuhitsu",
     "discardTabUntitled": "There are unsaved changes. Save as a new file?",
