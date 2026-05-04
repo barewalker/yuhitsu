@@ -1,0 +1,103 @@
+# tag push(`v*`)でトリガーされるリリースビルド。
+# tauri-apps/tauri-action が各 OS でビルドして GitHub Release にバンドル
+# (.deb / .AppImage / .rpm / .msi / .dmg)を upload する。
+#
+# 署名は alpha 段階では行わない(費用面の理由、README 参照)。
+# 将来署名を入れる時は SignPath.io OSS plan / Apple Developer Program /
+# クラウド HSM 等を検討、その場合の secrets はワークフロー env に追加する。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # 手動トリガー(リハーサル用)。tag が無い場合は draft release を作る
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+          # macOS は alpha 段階では配布対象外(README 参照)。CI ビルドが
+          # 通ることだけ確認するため job は残し、Release には upload しない
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 同梱フォントの submodule を取り込むため。tauri.conf.json の
+          # bundle.resources が submodule 内パスを参照しているので、
+          # submodule なしではバンドルが空になる。
+          submodules: recursive
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # macOS universal バイナリ用に追加ターゲットを入れる(matrix の
+          # macos-latest 行のみで使われる)
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Install Linux build deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+        working-directory: app
+
+      - name: Build & upload (tauri-action)
+        # tag push 時のみ Release に upload。手動トリガーや push (tag 以外)
+        # では tag-name を空にすると tauri-action が build only で抜ける
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: "Yuhitsu ${{ github.ref_name }}"
+          releaseBody: |
+            See [PROGRESS.md](https://github.com/barewalker/yuhitsu/blob/main/PROGRESS.md) for changes.
+
+            ## ⚠️ Notes
+            - **Windows**: SmartScreen の青い警告が出ますが、「詳細情報」→「実行」で起動できます(個人 OSS のため未署名)
+            - **macOS**: alpha 段階では配布対象外です(動作未検証)
+          releaseDraft: true
+          prerelease: true
+          args: ${{ matrix.args }}

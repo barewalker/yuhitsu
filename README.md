@@ -1,8 +1,10 @@
 # 右筆 (Yuhitsu)
 
-**業務文書作成の味方。Typst を GUI で、ローカルで、日本語ファーストで。**
+**業務文書作成の味方。[Typst](https://typst.app) を GUI で、ローカルで、日本語ファーストで。**
 
-> ⚠️ **現在 Phase 0(調査 & PoC)段階です。動くものはまだありません。**
+> 🚧 **現在 v0.1.0-alpha に向けた開発段階です。** 早期フィードバック大歓迎ですが、本番運用には推奨しません。
+
+---
 
 ## これは何?
 
@@ -14,46 +16,168 @@ Yuhitsu(右筆)は、[Typst](https://typst.app) 組版システムのための�
 
 Typst は LaTeX 代替として注目されている組版システムですが、既存のツールには以下のギャップがあります:
 
-- **[Typst 公式 Web アプリ](https://typst.app)** はクラウド必須で、機密文書を扱う企業・組織には導入しづらい
-- **[Typstify](https://typstify.com)** は完成度が高いが商用・クローズドソース
-- **[Typstudio](https://github.com/Cubxity/typstudio)** は OSS だが長期停滞
-- **VS Code + Tinymist** は強力だが、IDE に慣れない層には届かない
+| ツール | OSS | ローカル | GUI | 日本語ファースト |
+|---|---|---|---|---|
+| Typst 公式 Web アプリ | ❌ | ❌ | ✅ | ❌ |
+| Typstify | ❌ | ✅ | ✅ | ❌ |
+| Typstudio | ✅ | ✅ | ✅ | ❌(長期停滞) |
+| VS Code + Tinymist | ✅ | ✅ | ❌(IDE) | ❌ |
 
-Yuhitsu は「**OSS × ローカル × GUI × 日本語ファースト**」の空白を埋めます。
+Yuhitsu は「**OSS × ローカル × GUI × 日本語ファースト × 実用**」の空白を埋めます。事務 / 営業 / コマンドラインに不慣れな技術者など、**Typst を直接書くにはハードルが高い層** が業務文書を作れることを目指しています。
 
-## 特徴(予定)
+## 主な機能(v0.1 alpha 段階)
 
-- 🇯🇵 **日本語ファースト**: Harano Aji フォント同梱、和文組版の罠を自動回避
-- 📝 **業務文書テンプレート同梱**: 報告書、稟議、議事録、論文、スライド
-- 🖱️ **GUI 親和的**: IDE に不慣れな方でも使える live preview エディタ
-- ✨ **WYSIWYG-lite モード**(将来): 記法を隠してプレーンに、編集時は見える
-- 📋 **フォーム型テンプレート**(将来): テンプレート引数を自動で入力フォーム化
-- 🔒 **完全ローカル**: データは端末から出ない
-- 🆓 **オープンソース**: Apache-2.0
+### Typst エディタ機能
+- **ライブプレビュー** — 編集中の未保存内容もリアルタイムに反映(tinymist preview 経由)
+- **LSP 統合** — 補完 / 診断 / hover ドキュメント(tinymist LSP 経由)
+- **構文ハイライト** — Typst 構文を色分け
+- **PDF 出力** — Ctrl+E で 1 ボタン
+- **検索 / 置換** — Ctrl+F / Ctrl+H、正規表現 / 大文字小文字 / 単語単位
+- **GUI 挿入ボタン** — 太字 / 斜体 / 見出し / リスト / 数式 / コード / リンク / 脚注 / 引用 / 画像 / 表 / 参考文献
 
-## 開発状況
+### 編集モード(切替可能)
+- **OS 標準**(default)
+- **vim**(experimental — IME / WebKit 環境で挙動不安定の既知問題あり、上級者向け)
+- **emacs**
 
-- [x] 構想・企画
-- [ ] **Phase 0: 調査 & PoC**(現在ここ)
-- [ ] Phase 1: MVP
-- [ ] Phase 2: UX 強化
-- [ ] Phase 3: WYSIWYG-lite モード
+### ファイル / プロジェクト管理
+- **タブ機能** — 複数同時編集、ドラッグ並び替え、ホットエグジット(終了時のタブ復元)
+- **プロジェクトビュー(サイドバー)** — ファイルツリー、git status バッジ、右クリックメニュー(新規 / 名前変更 / 削除)
+- **画像 / PDF タブ表示** — `.png` / `.svg` / `.pdf` 等を直接タブで開いて閲覧(Typst で取り込む資源として)
 
-詳細は [PROGRESS.md](./PROGRESS.md) を参照。
+### 業務文書テンプレート(同梱、ja / en 両対応)
+- 業務報告書 / 技術報告書 / 議事録 / スライド / 空ドキュメント
+- **フォーム型テンプレート(簡素版)** — テンプレ関数の引数をフォームに展開、入力で文書本文に反映
 
-## 技術スタック(暫定)
+### UI / カスタマイズ
+- **コマンドパレット**(Ctrl+Shift+P / F1) — 全機能を fuzzy 検索、日本語 locale ではかな・ローマ字・英語で引ける
+- **三点リーダーメニュー** — 全機能のカテゴリ別アクセス
+- **ツールバー編集 UI** — D&D で並び替え、項目追加 / 削除、プリセット(標準 / ミニマル / 論文寄り)
+- **キーバインド設定 UI** — 全コマンドのキーバインドを変更可
+- **ダーク / ライトテーマ** — OS 設定に自動追従 or 手動固定
+- **日本語 / 英語 UI** — `navigator.language` 自動推測 or 設定で固定
+- **自前タイトルバー(CSD)** — ファイル名 / カーソル位置 / 文字数を集約
 
-- [Tauri](https://tauri.app/) (Rust + WebView)
-- [CodeMirror 6](https://codemirror.net/)
-- [typst](https://github.com/typst/typst) crate
-- [tinymist](https://github.com/Myriad-Dreamin/tinymist) LSP
+### 同梱フォント
+- **Harano Aji Mincho / Gothic**(Regular + Bold)— [trueroad/HaranoAjiFonts](https://github.com/trueroad/HaranoAjiFonts)、SIL Open Font License 1.1
+
+詳細・予定機能は [PROGRESS.md](./PROGRESS.md) を参照。
+
+---
+
+## ダウンロードとインストール
+
+> 🚧 v0.1.0-alpha のリリース準備中です。リリース後 [Releases](https://github.com/barewalker/yuhitsu/releases) ページから OS 別バイナリを取得できます。
+
+### Linux
+
+`.AppImage`(どのディストロでも動く)or `.deb`(Debian / Ubuntu)を Releases から DL。
+
+```bash
+# AppImage
+chmod +x yuhitsu_*.AppImage
+./yuhitsu_*.AppImage
+
+# .deb
+sudo dpkg -i yuhitsu_*.deb
+```
+
+### Windows
+
+`.msi` インストーラを Releases から DL → 実行。
+
+> ⚠️ **SmartScreen 警告について**
+> Yuhitsu は個人 OSS のため、Microsoft のコード署名証明書(年額数万円)を取得していません。初回実行時に SmartScreen の青い警告画面が出ますが、**「詳細情報」→「実行」**で起動できます。これは Helix エディタや Alacritty 等の他 OSS でも同様の運用です。
+> 将来的に [SignPath.io の OSS 無料署名](https://signpath.io/) などの対応を検討します。
+
+### macOS
+
+> 🚧 alpha 段階では macOS は配布対象外です。CI でビルド成功は確認していますが、開発者が macOS マシンを持たないため動作未検証です。試したい方は [ソースからのビルド](#開発者向け-ソースからのビルド) をお試しください。
+
+---
+
+## 使い方の基本
+
+1. **起動** → 初回起動時にテンプレート選択ダイアログが出ます
+2. **テンプレート選択**(業務報告書 / 議事録 等)→ エディタに本文が入る
+3. **左上の三点リーダー** から全機能にアクセス可能
+4. **F1** または **Ctrl+Shift+P** でコマンドパレット
+5. **Ctrl+S** で保存(`.typ` ファイルとして)
+6. **Ctrl+E** で PDF 書き出し
+
+詳しい操作は本体の **三点リーダー → ヘルプ → Yuhitsu について** で各種ドキュメントへのリンクが見られます。
+
+---
+
+## 開発者向け(ソースからのビルド)
+
+### 前提
+
+- [Rust](https://www.rust-lang.org/) 1.77+
+- [Node.js](https://nodejs.org/) 20+ + [pnpm](https://pnpm.io/) 10+
+- [tinymist](https://github.com/Myriad-Dreamin/tinymist)(`PATH` に通っていること)
+- Linux:`libwebkit2gtk-4.1-dev`、`libssl-dev`、`libgtk-3-dev` 等(Tauri の Linux ビルド前提)
+- macOS:Xcode CLT
+- Windows:Microsoft C++ Build Tools + WebView2
+
+### セットアップ
+
+```bash
+git clone --recursive https://github.com/barewalker/yuhitsu.git
+cd yuhitsu/app
+pnpm install
+pnpm tauri dev
+```
+
+> ⚠️ **`--recursive`** が重要:Harano Aji フォントを git submodule として取り込んでいるため。
+
+### リリースビルド
+
+```bash
+cd app
+pnpm tauri build
+# 成果物は app/src-tauri/target/release/bundle/ 以下
+```
+
+---
+
+## ロードマップ
+
+- **Phase 0**(完了):調査 & PoC、技術選定
+- **Phase 1**(現在):MVP — エディタ / テンプレ / プレビュー / 配布
+- **Phase 2**(予定):UX 強化、内蔵 AI 機能、git お世話機能
+- **Phase 3**(予定):WYSIWYG-lite モード、`.typz` 単一ファイルバンドル、MCP サーバ化(外部エージェント連携)
+
+詳細は [PROGRESS.md](./PROGRESS.md)。
+
+---
+
+## 技術スタック
+
+- **シェル**:[Tauri 2](https://tauri.app/) (Rust + OS WebView)
+- **エディタ**:[CodeMirror 6](https://codemirror.net/)
+- **Typst エンジン**:[Typst](https://github.com/typst/typst) を [tinymist](https://github.com/Myriad-Dreamin/tinymist) 経由で使用(LSP / preview / compile)
+
+---
 
 ## ライセンス
 
-[Apache-2.0](./LICENSE)
+- 本体:**[Apache-2.0](./LICENSE)**
+- 同梱フォント(Harano Aji Mincho / Gothic):**SIL Open Font License 1.1** (Copyright © trueroad)
+
+---
 
 ## 作者
 
 [barewalker](https://github.com/barewalker)
 
 業務文書作成の現場ニーズから出発した個人プロジェクトです。同じ課題を抱える方に広く使っていただければ幸いです。
+
+---
+
+## 関連リンク
+
+- [Typst 公式](https://typst.app/)
+- [Typst 公式日本語ドキュメント](https://typst-jp.github.io/docs/)
+- [Tinymist](https://github.com/Myriad-Dreamin/tinymist)
+- [Harano Aji Fonts](https://github.com/trueroad/HaranoAjiFonts)

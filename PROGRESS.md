@@ -270,9 +270,19 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - [x] **設定読み込みエラーの可視化**(2026-05-02)。Rust の `validate_settings_json` で `serde_json` パースして「行 X 列 Y: …」を返し、ステータスバーに表示。修正後 reload 成功で自動クリア(専用フラグ `settingsErrorActive` で他の error メッセージとは独立に管理)
 
 ### 配布
-- [ ] winget で配布可能にする
-- [ ] GitHub Releases で Windows/macOS/Linux バイナリ提供
-- [ ] コード署名(氏の GlobalSign USB トークン活用)
+- [x] **GitHub Releases で配布パイプライン整備**(2026-05-04)
+  - `.github/workflows/release.yml`:tag `v*` push or 手動トリガーで Linux/Windows/macOS マトリクスビルド、`tauri-apps/tauri-action` で各 OS バンドルを Draft Release に upload
+  - `.github/workflows/ci.yml`:PR / main push 毎に `pnpm check` + `cargo check`(完全ビルドは重いので skip)
+  - 配布対象:Linux(.deb / .AppImage / .rpm)、Windows(.msi)、macOS は CI ビルド成功確認のみ(配布対象外)
+  - **ローカル `pnpm tauri build` 動作確認**:.deb / .rpm 成功、.AppImage は Ubuntu 24+ の libfuse2 不在 + linuxdeploy 内蔵 strip が `.relr.dyn` を認識できない問題で失敗。CI(Ubuntu 22.04)で動く可能性が高いので CI で試す方針に切替
+  - .deb 動作確認済(`sudo dpkg -i ...` → 起動 → dev 版と同じ動作)
+- [ ] **コード署名は当面なし**(2026-05-04 判断)
+  - 個人 OSS でマネタイズなしのため、Win 用 OV/EV 証明書(年額数百ドル)は非現実的
+  - GlobalSign USB は氏の所属会社のもので個人プロジェクトには使えない
+  - alpha 段階では無署名配布(Helix / Alacritty 等の他 OSS と同じ運用、SmartScreen 警告対処を README に明記)
+  - 将来:[SignPath.io OSS 無料プラン](https://signpath.io/sign-windows-products) 申請(活発な OSS が条件、人気が出てから検討)
+  - macOS は Apple Developer Program($99/年)未加入、配布対象外を継続
+- [ ] winget で配布可能にする(GitHub Releases から alpha が出てから別途 PR)
 
 ### リリース
 - [ ] v0.1.0 alpha リリース
@@ -599,6 +609,23 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - 副次:`save / saveAs` を `Promise<boolean>` 化(2026-05-01)した時の取りこぼしで `CommandContext` の型が `Promise<void>` のままだった件を修正(`Promise<unknown>` に緩和)
 - 残:無題タブ(path 無し)はまだ対象外。仮想パス(例 `__yuhitsu_unsaved_<tabId>__.typ`)を割り当てて memory file 化すれば対応可だが、preview の subprocess 起動引数に実在ファイルが要る制約があり別タスク
 - 動作確認:**氏に GUI で確認してもらう必要あり**。型チェック(`pnpm check`)・Rust ビルド(`cargo check`)は通過
+
+### 2026-05-04: 配布パイプライン整備(無署名 + GitHub Releases + GitHub Actions)
+- **判断**(氏合意):
+  - **コード署名は当面なし**:個人 OSS、マネタイズなし、Win 証明書(年額数百ドル)/ Apple Developer($99/年)はかけない。会社の GlobalSign USB は私用不可
+  - **alpha は無署名配布**:Helix / Alacritty 等の他 OSS と同じ運用。Win SmartScreen / Mac Gatekeeper の警告対処は README で明記
+  - **macOS は alpha では配布対象外**:CI でビルド成功確認のみ、開発機が Linux のため動作未検証
+  - 将来:SignPath.io OSS 無料プラン / Microsoft Trusted Signing 等が選択肢、活発な OSS としての実績が出てから申請
+- 実装:
+  - `.github/workflows/release.yml`:tag `v*` push でマトリクスビルド + Draft Release 作成。tauri-action 利用
+  - `.github/workflows/ci.yml`:`pnpm check` + `cargo check` の軽量 CI(完全ビルドは release のみ)
+  - README.md を Phase 1 alpha 向けに全面書き直し(既存機能リスト、ダウンロード手順、SmartScreen 警告対処、開発者向けビルド手順、ロードマップ)
+- ローカルビルド検証:`pnpm tauri build` で .deb / .rpm 成功、.AppImage は失敗
+  - 真因:Ubuntu 24+ で linuxdeploy 内蔵の古い `strip` が glibc の `.relr.dyn` ELF section を認識できない
+  - 試した回避策:`NO_STRIP=true` / `APPIMAGE_EXTRACT_AND_RUN=1` 環境変数を渡すも、tauri-bundler 内部で env が propagate されず効かない
+  - 判断:CI(Ubuntu 22.04 ランナー、古い ABI)で再挑戦。ローカルでは .deb / .rpm のみ動作確認、これで alpha 配布は可
+  - 残:CI で .AppImage が通れば配布対象に含める、通らなければ alpha は .deb / .rpm / .msi のみで出す
+- .deb 動作確認:`sudo dpkg -i ...` → 起動 → dev 版と同じ動作確認
 
 ### 2026-05-03: vim mode は experimental 扱い(WebKitGTK 環境で挙動不審)
 - **発覚した問題**(氏報告):
