@@ -350,7 +350,6 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - Harano Aji 同梱のインストーラサイズ影響(数十MB × 複数ウェイト)
   - → 初回起動時オンデマンド DL 方式も検討
 - Detypify(手書き数式)統合可否
-- (redacted internal plugin)
 - 縦組みテンプレート
 - 共同編集機能(Typst On-Premises と被るため優先度低)
 
