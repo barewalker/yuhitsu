@@ -182,3 +182,9 @@ A personal project that started from frustration with existing options for produ
 - [Typst](https://typst.app/)
 - [Tinymist](https://github.com/Myriad-Dreamin/tinymist)
 - [Harano Aji Fonts](https://github.com/trueroad/HaranoAjiFonts)
+
+---
+
+## Acknowledgements
+
+Implementation of this project was assisted by [Claude Code](https://claude.com/claude-code) (Anthropic). Technical decisions, design, and quality responsibility lie with the author.

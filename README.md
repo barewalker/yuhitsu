@@ -183,3 +183,9 @@ pnpm tauri build
 - [Typst 公式日本語ドキュメント](https://typst-jp.github.io/docs/)
 - [Tinymist](https://github.com/Myriad-Dreamin/tinymist)
 - [Harano Aji Fonts](https://github.com/trueroad/HaranoAjiFonts)
+
+---
+
+## 謝辞
+
+本プロジェクトの実装は [Claude Code](https://claude.com/claude-code)(Anthropic)の支援のもとで進められました。技術選定・設計判断・品質責任は作者が担っています。
