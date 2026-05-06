@@ -47,6 +47,13 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: app
 
+      # tauri.conf.json の bundle.externalBin が実体検証されるため、
+      # cargo check 前に sidecar を配置しておく必要がある。
+      - name: Fetch tinymist
+        run: ./scripts/fetch-tinymist.sh
+        env:
+          TINYMIST_TARGET: x86_64-unknown-linux-gnu
+
       - name: svelte-check
         run: pnpm check
         working-directory: app
