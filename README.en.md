@@ -84,6 +84,21 @@ chmod +x yuhitsu_*.AppImage
 sudo dpkg -i yuhitsu_*.deb
 ```
 
+> 💡 **If Japanese / CJK IME doesn't work**
+>
+> On Linux distros installed in a non-Japanese locale where fcitx5 / ibus was added later, the IME-bridge environment variables may not be set in your session, which can break kanji conversion in the editor. This is general WebKit2GTK + fcitx5 / ibus behavior, not Yuhitsu-specific.
+>
+> On Ubuntu, the standard fix is `im-config -n fcitx5` (or `ibus`). Alternatively, set the variables when launching:
+>
+> ```bash
+> # fcitx5
+> GTK_IM_MODULE=fcitx XMODIFIERS=@im=fcitx yuhitsu
+> # ibus
+> GTK_IM_MODULE=ibus XMODIFIERS=@im=ibus yuhitsu
+> ```
+>
+> To persist them, add to `~/.profile` or `~/.config/environment.d/im.conf`.
+
 ### Windows
 
 Download the `.msi` installer from Releases and run it.

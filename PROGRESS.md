@@ -688,6 +688,18 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
 - **判断**:Universe テンプレ取り込み UI は **Phase 2 で扱う**(Phase 1 Sprint 3 では同梱テンプレのみ)。Phase 2 の「パッケージ管理 UI」項目を Universe 連携 UI として具体化(取り込み / 閲覧 / キャッシュ可視化の 3 機能)
 - 残:Sprint 3 の残タスクに戻る(フォーム型テンプレ簡素版 / ツールバー D&D 編集 UI / キーバインド設定 UI など)
 
+### 2026-05-05: Linux IME 対応はアプリ側で持たない方針(README 案内に切替)
+- **発端**(氏報告):US EN locale の Ubuntu に後付けで fcitx5(SKK / Mozc)を入れた環境で、Yuhitsu のエディタで漢字変換ができない。手動で `GTK_IM_MODULE=fcitx ./yuhitsu` 等を付けると動作する
+- **試行 1**:`ensure_im_env()` を実装し、起動時に走っている IME daemon(fcitx5 / fcitx / ibus-daemon)を `pgrep -x` で検出して `GTK_IM_MODULE` / `QT_IM_MODULE` / `XMODIFIERS` を `std::env::set_var` で補完。Windows / macOS には影響しない `#[cfg(target_os = "linux")]`
+- **試行 2**:set_var では効かなかったので `main()` 冒頭(tauri::Builder 構築前)で呼ぶ位置に移動 → 効かず
+- **試行 3**:`std::os::unix::process::CommandExt::exec()` で **自分自身を再起動** し execve(2) の env として渡す形に変更(無限ループ防止に YUHITSU_IM_ENV_FIXED マーカ)。`/proc/<pid>/environ` で env が正しく立っているのを確認したものの、それでも漢字変換は復旧しなかった
+- **試行 4**:shell から `GTK_IM_MODULE=fcitx XMODIFIERS=@im=fcitx pnpm tauri dev` で起動 → アプリ内ログ `[ime] GTK_IM_MODULE already set (fcitx), leaving as-is` が出て env は確実に inherit されている。が **これでも変換できなかった**(env タイミングの問題ではなく、CodeMirror 6 + WebKit2GTK + fcitx5 wayland の組み合わせの別レイヤーの問題と思われる)
+- **氏判断**:**アプリ側で env の自動補正は持たない**。VS Code / Firefox / Chromium 等の主要 OSS も持っておらず、Linux 界隈の標準は OS セッション側で env を立てておくこと(`im-config` / `~/.profile` / `~/.config/environment.d/`)。Yuhitsu のターゲット層は Windows 中心で、Linux ユーザの大半は既に env が立っている前提でよい
+- **対応**:
+  - `ensure_im_env()` および main.rs の呼び出しを撤去(コードを単純化)
+  - README.md / README.en.md の Linux インストール節に「IME が効かない場合」のサブブロックを追加し、`im-config` または起動時の env 指定を案内
+- **残課題**:env を立てた状態でも変換が復旧しなかった環境特有の問題は、OS 側 env 設定で本当に直るかを別環境で再検証する余地あり(本セッションの再現環境では未確認)。エディタ層(CodeMirror 6 の composition events)が原因の可能性も残るが、Phase 2 以降で必要に応じて深掘りする
+
 ### 2026-05-06: tinymist を sidecar として同梱(PATH 依存解消)
 - **発端**(氏報告):GUI 起動の Yuhitsu で「LSP 起動に失敗」エラー。原因は GNOME がアプリを spawn するときの PATH に `~/.local/bin` が含まれず `tinymist` が見つからない為。一般 Linux ユーザは大抵 tinymist 未インストールなので、配布物としても致命的
 - **当初の構想**:.deb の Depends:、起動時検出 + GUI 案内、wrapper script、sidecar 同梱の 4 案を比較

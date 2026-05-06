@@ -84,6 +84,21 @@ chmod +x yuhitsu_*.AppImage
 sudo dpkg -i yuhitsu_*.deb
 ```
 
+> 💡 **日本語入力(IME)が効かない場合**
+>
+> 日本語ロケールでない Linux に後付けで fcitx5 / ibus 等を入れた環境では、IME 連携用の環境変数がセッションに伝わっていないことがあり、Yuhitsu のエディタで漢字変換ができないことがあります(WebKit2GTK + fcitx5 / ibus 全般の挙動で、Yuhitsu 固有ではありません)。
+>
+> Ubuntu の場合は `im-config -n fcitx5`(または `ibus`)でセッション設定を行うのが標準です。設定しない場合は、起動時に明示する方法でも回避できます:
+>
+> ```bash
+> # fcitx5 を使う場合
+> GTK_IM_MODULE=fcitx XMODIFIERS=@im=fcitx yuhitsu
+> # ibus を使う場合
+> GTK_IM_MODULE=ibus XMODIFIERS=@im=ibus yuhitsu
+> ```
+>
+> 永続化するなら `~/.profile` や `~/.config/environment.d/im.conf` 等に書きます。
+
 ### Windows
 
 `.msi` インストーラを Releases から DL → 実行。
