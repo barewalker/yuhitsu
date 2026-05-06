@@ -117,21 +117,26 @@ For more, open the **hamburger → Help → About Yuhitsu** dialog inside the ap
 
 - [Rust](https://www.rust-lang.org/) 1.77+
 - [Node.js](https://nodejs.org/) 20+ + [pnpm](https://pnpm.io/) 10+
-- [tinymist](https://github.com/Myriad-Dreamin/tinymist) on `PATH`
 - Linux: `libwebkit2gtk-4.1-dev`, `libssl-dev`, `libgtk-3-dev`, etc. (Tauri's Linux build deps)
 - macOS: Xcode CLT
 - Windows: Microsoft C++ Build Tools + WebView2
+
+`tinymist` is bundled as a sidecar binary, so contributors do not need to install it separately. `scripts/fetch-tinymist.sh` downloads the binary for your host target triple.
 
 ### Setup
 
 ```bash
 git clone --recursive https://github.com/barewalker/yuhitsu.git
-cd yuhitsu/app
+cd yuhitsu
+./scripts/fetch-tinymist.sh   # fetch the tinymist sidecar
+cd app
 pnpm install
 pnpm tauri dev
 ```
 
 > ⚠️ **`--recursive` matters**: the bundled Harano Aji fonts are pulled in as a git submodule.
+>
+> 💡 **`fetch-tinymist.sh`** is idempotent (skips if already present). Override the pinned version with `TINYMIST_VERSION=v0.14.16 ./scripts/fetch-tinymist.sh`.
 
 ### Release build
 

@@ -25,6 +25,11 @@ jobs:
         include:
           - platform: ubuntu-22.04
             args: ""
+          # ARM Linux(aarch64)対応。Apple Silicon の Linux VM /
+          # Raspberry Pi / クラウド ARM サーバ向け。GitHub の public リポは
+          # 無料で arm64 ランナーが使える。
+          - platform: ubuntu-22.04-arm
+            args: ""
           - platform: windows-latest
             args: ""
           # macOS は alpha 段階では配布対象外(README 参照)。CI ビルドが
@@ -67,7 +72,7 @@ jobs:
           workspaces: app/src-tauri -> target
 
       - name: Install Linux build deps
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu-22.04')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -81,6 +86,41 @@ jobs:
       - name: Install frontend deps
         run: pnpm install --frozen-lockfile
         working-directory: app
+
+      # tinymist sidecar を target triple ごとに DL。tauri-action が
+      # bundle.externalBin の実体検証をするため、tauri-action 実行前に
+      # `app/src-tauri/binaries/tinymist-<triple>` を用意しておく必要がある。
+      - name: Fetch tinymist (Linux x86_64)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: ./scripts/fetch-tinymist.sh
+        env:
+          TINYMIST_TARGET: x86_64-unknown-linux-gnu
+
+      - name: Fetch tinymist (Linux aarch64)
+        if: matrix.platform == 'ubuntu-22.04-arm'
+        run: ./scripts/fetch-tinymist.sh
+        env:
+          TINYMIST_TARGET: aarch64-unknown-linux-gnu
+
+      - name: Fetch tinymist (Windows x86_64)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: ./scripts/fetch-tinymist.sh
+        env:
+          TINYMIST_TARGET: x86_64-pc-windows-msvc
+
+      # macOS は universal-apple-darwin で build するので、x86_64 / aarch64 の
+      # 両方を DL し lipo で universal バイナリを合成する。
+      - name: Fetch tinymist (macOS universal)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          TINYMIST_TARGET=aarch64-apple-darwin ./scripts/fetch-tinymist.sh
+          TINYMIST_TARGET=x86_64-apple-darwin ./scripts/fetch-tinymist.sh
+          lipo -create \
+            app/src-tauri/binaries/tinymist-x86_64-apple-darwin \
+            app/src-tauri/binaries/tinymist-aarch64-apple-darwin \
+            -output app/src-tauri/binaries/tinymist-universal-apple-darwin
+          chmod +x app/src-tauri/binaries/tinymist-universal-apple-darwin
 
       - name: Build & upload (tauri-action)
         # tag push 時のみ Release に upload。手動トリガーや push (tag 以外)

@@ -687,3 +687,21 @@ Typstudio fork 路線 vs ゼロスタート路線の判断材料を集め、技�
   - テンプレ取り込み(`typst init @preview/<name>`)は **UI 未実装**。同梱テンプレ(`app/src/lib/templates/<id>/`)のみ起動ダイアログから選択可能
 - **判断**:Universe テンプレ取り込み UI は **Phase 2 で扱う**(Phase 1 Sprint 3 では同梱テンプレのみ)。Phase 2 の「パッケージ管理 UI」項目を Universe 連携 UI として具体化(取り込み / 閲覧 / キャッシュ可視化の 3 機能)
 - 残:Sprint 3 の残タスクに戻る(フォーム型テンプレ簡素版 / ツールバー D&D 編集 UI / キーバインド設定 UI など)
+
+### 2026-05-06: tinymist を sidecar として同梱(PATH 依存解消)
+- **発端**(氏報告):GUI 起動の Yuhitsu で「LSP 起動に失敗」エラー。原因は GNOME がアプリを spawn するときの PATH に `~/.local/bin` が含まれず `tinymist` が見つからない為。一般 Linux ユーザは大抵 tinymist 未インストールなので、配布物としても致命的
+- **当初の構想**:.deb の Depends:、起動時検出 + GUI 案内、wrapper script、sidecar 同梱の 4 案を比較
+- **氏判断**:**sidecar 同梱(Tauri externalBin)を Phase 1 中に対応**。配布の前提条件として外せない。サイズ増(deb で 24.5MB → 53MB、+28MB)は許容
+- **設計**:
+  - tinymist v0.14.16(最新安定)で固定。`tauri.conf.json` の `bundle.externalBin: ["binaries/tinymist"]` を追加し、Tauri が target triple サフィクスを剥がして main binary の隣に配置するよう設定
+  - Rust 側に `tinymist_path()` ヘルパを追加(`lib.rs`)。解決順は:(1) 実行ファイルの隣 = リリース配置、(2) `<CARGO_MANIFEST_DIR>/binaries/tinymist-<host-triple>` = dev 配置、(3) PATH = フォールバック。`Command::new("tinymist")` の 3 箇所(preview / compile / lsp)を `Command::new(tinymist_path())` に置換
+  - `host_target_triple()` は cfg! で静的に決定(クロスコンパイル対応)
+  - `scripts/fetch-tinymist.sh`:GitHub Releases から host triple のバイナリを DL して `app/src-tauri/binaries/tinymist-<triple>` に配置。冪等。`TINYMIST_TARGET` / `TINYMIST_VERSION` 環境変数で上書き可
+  - `.gitignore` に `binaries/` を追加(数十 MB の binary をコミットしない)
+- **CI 対応**(`release.yml`):tauri-action の前にマトリクス各行で `fetch-tinymist.sh` を呼ぶ step を追加。Linux x86_64 / Linux aarch64 / Windows は単純呼び出し。macOS は universal-apple-darwin で build するので x86_64 / aarch64 の両方を DL し `lipo` で universal バイナリを合成
+- **動作確認**:
+  - `pnpm tauri build --bundles deb` 通過、生成された .deb 内に `/usr/bin/tinymist` が同梱されることを確認(53MB)
+  - 段階 1 テスト(release バイナリ直接起動)で LSP / preview / 漢字変換すべて動作 ✓
+  - 段階 2(.desktop 経由 GUI 起動)と 段階 3(.deb 実機インストール)は氏に確認依頼中
+- **README 更新**:「tinymist を PATH に通せ」の前提を撤去、`scripts/fetch-tinymist.sh` の手順を追記(README.md / README.en.md)
+- **Phase 1 残:**ARM Linux 含む実機 .deb インストール検証は氏側で実施。CI のサイズ増(macOS universal は ~120MB 程度になる見込み)が無料枠を圧迫しないかは run 後にチェック

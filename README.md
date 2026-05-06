@@ -117,21 +117,26 @@ sudo dpkg -i yuhitsu_*.deb
 
 - [Rust](https://www.rust-lang.org/) 1.77+
 - [Node.js](https://nodejs.org/) 20+ + [pnpm](https://pnpm.io/) 10+
-- [tinymist](https://github.com/Myriad-Dreamin/tinymist)(`PATH` に通っていること)
 - Linux:`libwebkit2gtk-4.1-dev`、`libssl-dev`、`libgtk-3-dev` 等(Tauri の Linux ビルド前提)
 - macOS:Xcode CLT
 - Windows:Microsoft C++ Build Tools + WebView2
+
+`tinymist` は Yuhitsu に sidecar として同梱されるため、開発者が個別にインストールする必要はありません(`scripts/fetch-tinymist.sh` が `pnpm install` 直後に target triple 用のバイナリを取得します)。
 
 ### セットアップ
 
 ```bash
 git clone --recursive https://github.com/barewalker/yuhitsu.git
-cd yuhitsu/app
+cd yuhitsu
+./scripts/fetch-tinymist.sh   # tinymist sidecar を取得
+cd app
 pnpm install
 pnpm tauri dev
 ```
 
 > ⚠️ **`--recursive`** が重要:Harano Aji フォントを git submodule として取り込んでいるため。
+>
+> 💡 **`fetch-tinymist.sh`** は冪等(同じ binary がある場合は再 DL しない)。版数を変えたい時は `TINYMIST_VERSION=v0.14.16 ./scripts/fetch-tinymist.sh` のように環境変数で指定。
 
 ### リリースビルド
 

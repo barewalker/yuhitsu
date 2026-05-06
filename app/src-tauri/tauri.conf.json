@@ -37,6 +37,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["binaries/tinymist"],
     "resources": {
       "resources/HaranoAjiFonts/HaranoAjiMincho-Regular.otf": "fonts/HaranoAjiMincho-Regular.otf",
       "resources/HaranoAjiFonts/HaranoAjiMincho-Bold.otf": "fonts/HaranoAjiMincho-Bold.otf",

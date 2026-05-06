@@ -14,6 +14,10 @@ node_modules/
 # Tauri (生成物)
 /app/src-tauri/gen/
 
+# Tauri sidecar binaries(scripts/fetch-tinymist.sh が DL する)
+# ビルド時に fetch するので git には含めない(数十 MB の binary をコミットしない)
+/app/src-tauri/binaries/
+
 # Editor / OS
 .DS_Store
 .vscode/*

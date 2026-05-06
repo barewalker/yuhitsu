@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -347,6 +347,68 @@ fn bundled_font_dir(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
+// 同梱した tinymist sidecar バイナリの絶対パスを返す。
+//
+// 解決順:
+// 1. リリース: main 実行ファイルと同じディレクトリの `tinymist`(Windows は `.exe`)。
+//    `tauri.conf.json` の `bundle.externalBin` で Tauri が target triple サフィクスを
+//    剥がして配置する位置。.deb なら `/usr/lib/yuhitsu/`、.msi なら exe の隣。
+// 2. dev: `<CARGO_MANIFEST_DIR>/binaries/tinymist-<host-triple>` を直接参照
+//    (`scripts/fetch-tinymist.sh` が DL する)。`pnpm tauri dev` 中はこちらが使われる。
+// 3. 上記いずれも見つからない場合は PATH ルックアップにフォールバック。
+//    バンドル前の旧来動作 / 開発者が手元で `cargo install tinymist` 済の救済用。
+fn tinymist_path() -> PathBuf {
+    let bin_name = if cfg!(windows) { "tinymist.exe" } else { "tinymist" };
+
+    // 1. リリース配置
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let p = dir.join(bin_name);
+            if p.exists() {
+                return p;
+            }
+        }
+    }
+
+    // 2. dev 配置
+    let triple = host_target_triple();
+    let dev_name = if cfg!(windows) {
+        format!("tinymist-{}.exe", triple)
+    } else {
+        format!("tinymist-{}", triple)
+    };
+    let dev_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("binaries")
+        .join(&dev_name);
+    if dev_path.exists() {
+        return dev_path;
+    }
+
+    // 3. PATH フォールバック
+    PathBuf::from("tinymist")
+}
+
+// Tauri の externalBin が target triple サフィクスで管理しているため、
+// dev 時のサイドカー解決にホストのトリプルが必要。cfg! の組み合わせで
+// 静的に決定する(クロスコンパイル時もビルド対象側のトリプルになる)。
+fn host_target_triple() -> &'static str {
+    if cfg!(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu")) {
+        "x86_64-unknown-linux-gnu"
+    } else if cfg!(all(target_arch = "aarch64", target_os = "linux", target_env = "gnu")) {
+        "aarch64-unknown-linux-gnu"
+    } else if cfg!(all(target_arch = "x86_64", target_os = "windows", target_env = "msvc")) {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(all(target_arch = "aarch64", target_os = "windows", target_env = "msvc")) {
+        "aarch64-pc-windows-msvc"
+    } else if cfg!(all(target_arch = "aarch64", target_os = "macos")) {
+        "aarch64-apple-darwin"
+    } else if cfg!(all(target_arch = "x86_64", target_os = "macos")) {
+        "x86_64-apple-darwin"
+    } else {
+        "unknown-target"
+    }
+}
+
 // Typst の `--root` に渡すプロジェクトルート。
 // Linux/macOS は `/`、Windows は入力パスのドライブ。tinymist は cwd を
 // 起点に root を相対化することがあり、cwd と root が食い違うと "entry
@@ -532,7 +594,7 @@ async fn start_preview(
     // ルートを root として渡す(セキュリティモデルは緩むが、ユーザ自身のファイルを
     // 自分のエディタで読むだけなので許容)。Windows は入力パスのドライブを起点に。
     let root = filesystem_root_for(&path);
-    let mut cmd = Command::new("tinymist");
+    let mut cmd = Command::new(tinymist_path());
     cmd.current_dir(&root)
         .args([
             "preview",
@@ -630,7 +692,7 @@ fn export_pdf(app: AppHandle, input: String, output: String) -> Result<(), Strin
     // preview と同じく filesystem ルートを `--root` に渡す。文書外の絶対パスを
     // 読みたい(例: ホーム配下のスクショ画像)用途に合わせる。
     let root = filesystem_root_for(&input);
-    let mut cmd = Command::new("tinymist");
+    let mut cmd = Command::new(tinymist_path());
     cmd.current_dir(&root)
         .args(["compile", "--root", &root]);
     if let Some(fonts) = bundled_font_dir(&app) {
@@ -680,7 +742,7 @@ impl LspState {
 async fn lsp_start(app: AppHandle, state: State<'_, LspState>) -> Result<(), String> {
     state.kill_existing().await;
 
-    let mut cmd = TokioCommand::new("tinymist");
+    let mut cmd = TokioCommand::new(tinymist_path());
     cmd.arg("lsp");
     if let Some(fonts) = bundled_font_dir(&app) {
         cmd.args(["--font-path", &fonts.to_string_lossy()]);
